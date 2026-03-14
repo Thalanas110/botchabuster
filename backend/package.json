@@ -1,5 +1,4 @@
 {
-  // re-add opencv4nodejs 5.6.0 in the dependencies once installed.
   "name": "meatguard-backend",
   "version": "1.0.0",
   "description": "MeatGuard backend - OpenCV meat freshness analysis",

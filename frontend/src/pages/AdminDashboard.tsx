@@ -523,7 +523,18 @@ const AdminDashboard = () => {
                 <p className="text-sm text-muted-foreground text-center py-6">No inspections yet</p>
               ) : (
                 inspections.map((i) => (
-                  <div key={i.id} className="flex items-center justify-between rounded-lg border border-border p-3">
+                  <div key={i.id} className="flex items-center gap-3 rounded-lg border border-border p-3">
+                    {i.image_url ? (
+                      <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-md border border-border">
+                        <img src={i.image_url} alt="Sample" className="h-full w-full object-cover" />
+                      </div>
+                    ) : (
+                      <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
+                        <span className="font-display text-lg text-muted-foreground">
+                          {i.meat_type[0].toUpperCase()}
+                        </span>
+                      </div>
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         <span className="font-display text-sm font-semibold capitalize">{i.meat_type}</span>

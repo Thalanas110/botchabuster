@@ -10,6 +10,7 @@ import type { AnalysisResult, MeatType } from "@/types/inspection";
 import { Loader2, Save, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
+import { uploadClient } from "@/integrations/api";
 
 const meatTypes: { value: MeatType; label: string }[] = [
   { value: "pork", label: "Pork" },
@@ -76,12 +77,21 @@ const InspectPage = () => {
   }, [capturedFile, selectedMeat, analyzeImage]);
 
   const handleSave = useCallback(async () => {
-    if (!result) return;
+    if (!result || !capturedFile) return;
     if (!user) {
       toast.error("Please sign in to save inspections");
       return;
     }
     try {
+      // Upload the image through the backend API
+      let imageUrl: string | null = null;
+      try {
+        imageUrl = await uploadClient.uploadInspectionImage(capturedFile, user.id);
+      } catch (uploadError) {
+        console.error("Image upload failed:", uploadError);
+        toast.warning("Image upload failed, saving without image");
+      }
+
       await createInspection.mutateAsync({
         user_id: user.id,
         meat_type: selectedMeat,
@@ -96,12 +106,14 @@ const InspectPage = () => {
         glcm_homogeneity: result.glcm_features.homogeneity,
         flagged_deviations: result.flagged_deviations,
         explanation: result.explanation,
+        image_url: imageUrl,
       });
       toast.success("Inspection saved");
-    } catch {
-      toast.error("Failed to save — sign in required");
+    } catch (error) {
+      console.error("Save error:", error);
+      toast.error("Failed to save inspection");
     }
-  }, [result, selectedMeat, createInspection, user]);
+  }, [result, selectedMeat, createInspection, user, capturedFile]);
 
   const handleReset = useCallback(() => {
     setCapturedFile(null);

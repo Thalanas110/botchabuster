@@ -9,6 +9,7 @@ import { useCreateInspection } from "@/hooks/useInspections";
 import type { AnalysisResult, MeatType } from "@/types/inspection";
 import { Loader2, Save, RotateCcw } from "lucide-react";
 import { toast } from "sonner";
+import { useAuth } from "@/contexts/AuthContext";
 
 const meatTypes: { value: MeatType; label: string }[] = [
   { value: "pork", label: "Pork" },
@@ -19,6 +20,7 @@ const meatTypes: { value: MeatType; label: string }[] = [
 ];
 
 const InspectPage = () => {
+  const { user } = useAuth();
   const [selectedMeat, setSelectedMeat] = useState<MeatType>("pork");
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -75,8 +77,13 @@ const InspectPage = () => {
 
   const handleSave = useCallback(async () => {
     if (!result) return;
+    if (!user) {
+      toast.error("Please sign in to save inspections");
+      return;
+    }
     try {
       await createInspection.mutateAsync({
+        user_id: user.id,
         meat_type: selectedMeat,
         classification: result.classification,
         confidence_score: result.confidence_score,
@@ -94,7 +101,7 @@ const InspectPage = () => {
     } catch {
       toast.error("Failed to save — sign in required");
     }
-  }, [result, selectedMeat, createInspection]);
+  }, [result, selectedMeat, createInspection, user]);
 
   const handleReset = useCallback(() => {
     setCapturedFile(null);

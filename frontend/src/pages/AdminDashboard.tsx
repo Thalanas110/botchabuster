@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { inspectionClient } from "@/integrations/api/InspectionClient";
@@ -25,6 +26,7 @@ import {
   Users,
   RefreshCcw,
   ShieldCheck,
+  ChevronDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfDay, isAfter } from "date-fns";
@@ -236,9 +238,12 @@ const AdminDashboard = () => {
     );
   }
 
+  const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
+  const ActiveTabIcon = activeTabConfig.icon;
+
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] pb-24">
-      <div className="mx-auto w-full max-w-7xl px-4 pt-4">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] pb-24">
+      <div className="mx-auto w-full max-w-7xl min-w-0 px-4 pt-4">
         <section className="rounded-3xl border border-border/70 bg-card/90 p-4 shadow-[0_24px_70px_-34px_rgba(0,0,0,0.65)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -298,35 +303,47 @@ const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="mt-4 rounded-3xl border border-border/70 bg-card/85 p-2">
-          <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-            {tabs.map(({ key, label, icon: Icon }) => (
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/85 p-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <button
-                key={key}
-                onClick={() => setActiveTab(key)}
-                className={`flex items-center justify-center gap-2 rounded-2xl border px-3 py-3 text-sm font-display transition-colors ${
-                  activeTab === key
-                    ? "border-primary/40 bg-[hsl(var(--primary)/0.16)] text-foreground"
-                    : "border-transparent bg-background/55 text-muted-foreground hover:border-border/70 hover:text-foreground"
-                }`}
+                type="button"
+                className="group flex w-full items-center justify-between rounded-2xl border border-primary/40 bg-[hsl(var(--primary)/0.16)] px-4 py-3 text-left transition-colors hover:bg-[hsl(var(--primary)/0.20)]"
               >
-                <Icon className="h-4 w-4" />
-                {label}
+                <span className="flex items-center gap-2">
+                  <ActiveTabIcon className="h-4 w-4 text-foreground" />
+                  <span className="font-display text-sm uppercase tracking-wider text-foreground">{activeTabConfig.label}</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
               </button>
-            ))}
-          </div>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-w-[calc(100vw-2rem)] rounded-2xl border-border/70 bg-card/95 p-1">
+              {tabs.map(({ key, label, icon: Icon }) => (
+                <DropdownMenuItem
+                  key={key}
+                  onSelect={() => setActiveTab(key)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 font-display text-xs uppercase tracking-wider ${
+                    activeTab === key ? "bg-[hsl(var(--primary)/0.16)] text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
         </section>
 
         <div className="mt-4 space-y-4">
           {activeTab === "overview" && (
             <>
-              <div className="grid gap-4 xl:grid-cols-[1.2fr_0.8fr]">
-                <Card className="rounded-3xl border-border/70 bg-card/95">
+              <div className="grid min-w-0 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                   <CardHeader>
                     <CardTitle className="text-sm font-display uppercase tracking-wider">Daily Inspections (14 Days)</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ChartContainer config={chartConfig} className="h-[260px] w-full">
+                    <ChartContainer config={chartConfig} className="h-[260px] w-full min-w-0">
                       <AreaChart data={dailyInspections}>
                         <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
                         <XAxis dataKey="date" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
@@ -338,12 +355,12 @@ const AdminDashboard = () => {
                   </CardContent>
                 </Card>
 
-                <Card className="rounded-3xl border-border/70 bg-card/95">
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                   <CardHeader>
                     <CardTitle className="text-sm font-display uppercase tracking-wider">Classification Distribution</CardTitle>
                   </CardHeader>
                   <CardContent>
-                    <ChartContainer config={chartConfig} className="h-[260px] w-full">
+                    <ChartContainer config={chartConfig} className="h-[260px] w-full min-w-0">
                       <PieChart>
                         <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={3}>
                           {pieData.map((entry, idx) => (
@@ -450,20 +467,20 @@ const AdminDashboard = () => {
                 ) : (
                   <div className="grid gap-3 lg:grid-cols-2">
                     {inspections.map((i) => (
-                      <div key={i.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
-                        <div className="flex items-center gap-3">
+                      <div key={i.id} className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-background/50 p-3">
+                        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
                           {i.image_url ? (
-                            <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-border/70">
+                            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 sm:h-16 sm:w-16">
                               <img src={i.image_url} alt="Sample" className="h-full w-full object-cover" />
                             </div>
                           ) : (
-                            <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary">
+                            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary sm:h-16 sm:w-16">
                               <span className="font-display text-lg text-muted-foreground">{i.meat_type[0].toUpperCase()}</span>
                             </div>
                           )}
                           <div className="min-w-0 flex-1">
                             <div className="mb-1 flex items-center gap-2">
-                              <span className="font-display text-sm font-semibold capitalize">{i.meat_type}</span>
+                              <span className="truncate font-display text-sm font-semibold capitalize">{i.meat_type}</span>
                               <FreshnessBadge classification={i.classification} size="sm" />
                             </div>
                             <p className="text-xs text-muted-foreground">{format(new Date(i.created_at), "MMM d, yyyy h:mm a")}</p>
@@ -473,7 +490,7 @@ const AdminDashboard = () => {
                           <Button
                             variant="outline"
                             size="icon"
-                            className="h-9 w-9 rounded-xl border-border/70 text-destructive hover:text-destructive"
+                            className="h-8 w-8 rounded-xl border-border/70 text-destructive hover:text-destructive sm:h-9 sm:w-9"
                             onClick={() => void handleDeleteInspection(i.id)}
                           >
                             <Trash2 className="h-4 w-4" />

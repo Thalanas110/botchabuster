@@ -18,6 +18,7 @@ interface AuthContextType {
   updatePasswordWithRecoveryToken: (accessToken: string, password: string) => Promise<void>;
   updateEmail: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
+  setProfileState: (nextProfile: Profile | null) => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -147,6 +148,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await authClient.updatePassword(user.id, password);
   };
 
+  const setProfileState = (nextProfile: Profile | null) => {
+    setProfile(nextProfile);
+  };
+
   return (
     <AuthContext.Provider
       value={{
@@ -162,6 +167,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         updatePasswordWithRecoveryToken,
         updateEmail,
         updatePassword,
+        setProfileState,
       }}
     >
       {children}

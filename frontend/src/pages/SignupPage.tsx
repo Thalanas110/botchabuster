@@ -5,27 +5,22 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
-import { Loader2, ShieldCheck, KeyRound } from "lucide-react";
+import { Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
 const SignupPage = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [accessCode, setAccessCode] = useState("");
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!accessCode.trim()) {
-      toast.error("Inspector access code is required");
-      return;
-    }
     setLoading(true);
     try {
-      await signUp(email, password, fullName, accessCode.trim());
+      await signUp(email, password, fullName);
       toast.success("Account created! Check your email to verify.");
       navigate("/login");
     } catch (err: any) {
@@ -43,27 +38,10 @@ const SignupPage = () => {
             <ShieldCheck className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="font-display text-xl uppercase tracking-wider">Create Account</CardTitle>
-          <CardDescription>Join MeatLens as a verified inspector</CardDescription>
+          <CardDescription>Create your MeatLens inspector account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="accessCode" className="flex items-center gap-1.5">
-                <KeyRound className="h-3.5 w-3.5 text-primary" />
-                Inspector Access Code
-              </Label>
-              <Input
-                id="accessCode"
-                placeholder="Enter your access code"
-                value={accessCode}
-                onChange={(e) => setAccessCode(e.target.value)}
-                required
-                className="font-display tracking-wider"
-              />
-              <p className="text-[11px] text-muted-foreground">
-                Access codes are provided by your organization administrator.
-              </p>
-            </div>
             <div className="space-y-2">
               <Label htmlFor="fullName">Full Name</Label>
               <Input

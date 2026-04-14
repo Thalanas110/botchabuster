@@ -2,10 +2,10 @@ import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
+import { applyTheme } from "@/lib/themePreference";
 
-const storedTheme = window.localStorage.getItem("meatlens-theme");
-const initialTheme = storedTheme === "dark" ? "dark" : "light";
-document.documentElement.dataset.theme = initialTheme;
+// Start in light mode; app router/auth layer will apply user preference from DB.
+applyTheme(false);
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

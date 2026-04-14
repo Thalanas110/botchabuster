@@ -1,17 +1,13 @@
 import { Navigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { Loader2 } from "lucide-react";
 import type { ReactNode } from "react";
+import { NetworkLoadingScreen } from "@/components/NetworkLoadingScreen";
 
 export function ProtectedRoute({ children }: { children: ReactNode }) {
   const { user, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <NetworkLoadingScreen status="auth_loading" />;
   }
 
   if (!user) return <Navigate to="/login" replace />;
@@ -22,11 +18,7 @@ export function AdminRoute({ children }: { children: ReactNode }) {
   const { user, isAdmin, isLoading } = useAuth();
 
   if (isLoading) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-background">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+    return <NetworkLoadingScreen status="auth_loading" />;
   }
 
   if (!user) return <Navigate to="/login" replace />;

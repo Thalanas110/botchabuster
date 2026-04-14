@@ -21,10 +21,11 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { uploadClient } from "@/integrations/api/UploadClient";
+import { applyTheme } from "@/lib/themePreference";
 
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const { user, isAdmin, updateEmail, updatePassword, signOut } = useAuth();
+  const { user, isAdmin, updateEmail, updatePassword, signOut, setProfileState } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -54,17 +55,16 @@ const ProfilePage = () => {
   }, [user]);
 
   useEffect(() => {
-    const storedTheme = window.localStorage.getItem("meatlens-theme");
-    const isLight = storedTheme !== "dark";
-    setIsLightMode(isLight);
-    document.documentElement.dataset.theme = isLight ? "light" : "dark";
-  }, []);
+    const isDarkMode = Boolean(profile?.is_dark_mode);
+    setIsLightMode(!isDarkMode);
+  }, [profile?.is_dark_mode]);
 
   const loadProfile = async (userId: string) => {
     setIsLoading(true);
     try {
       const data = await profileClient.getProfile(userId);
       setProfile(data);
+      setProfileState(data);
       setFullName(data?.full_name ?? "");
     } catch (err) {
       console.error("Failed to load profile:", err);
@@ -83,6 +83,7 @@ const ProfilePage = () => {
       const avatarUrl = await uploadClient.uploadInspectionImage(file, user.id);
       const updated = await profileClient.updateProfile(user.id, { avatar_url: avatarUrl });
       setProfile(updated);
+      setProfileState(updated);
       toast.success("Profile image updated");
     } catch (err) {
       console.error("Avatar upload failed:", err);
@@ -104,6 +105,7 @@ const ProfilePage = () => {
       if (trimmedName !== (profile?.full_name ?? "")) {
         const updatedProfile = await profileClient.updateProfile(user.id, { full_name: trimmedName || null });
         setProfile(updatedProfile);
+        setProfileState(updatedProfile);
         changed = true;
       }
 
@@ -173,11 +175,22 @@ const ProfilePage = () => {
     }
   };
 
-  const handleThemeToggle = () => {
-    const nextIsLight = !isLightMode;
-    setIsLightMode(nextIsLight);
-    document.documentElement.dataset.theme = nextIsLight ? "light" : "dark";
-    window.localStorage.setItem("meatlens-theme", nextIsLight ? "light" : "dark");
+  const handleThemeToggle = async () => {
+    if (!user) return;
+
+    const nextIsDarkMode = isLightMode;
+
+    try {
+      const updatedProfile = await profileClient.updateProfile(user.id, { is_dark_mode: nextIsDarkMode });
+      setProfile(updatedProfile);
+      setProfileState(updatedProfile);
+      setIsLightMode(!nextIsDarkMode);
+      applyTheme(nextIsDarkMode);
+      toast.success(nextIsDarkMode ? "Dark mode enabled" : "Light mode enabled");
+    } catch (err) {
+      console.error("Theme update failed:", err);
+      toast.error("Failed to update theme preference");
+    }
   };
 
   if (isLoading) {

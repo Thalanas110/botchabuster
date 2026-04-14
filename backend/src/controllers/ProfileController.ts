@@ -20,12 +20,18 @@ export class ProfileController {
   async updateProfile(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { full_name, avatar_url, location } = req.body;
+      const { full_name, avatar_url, location, is_dark_mode } = req.body;
       if (!id) {
         res.status(400).json({ error: "User ID is required" });
         return;
       }
-      const profile = await profileService.updateProfile(id, { full_name, avatar_url, location });
+
+      if (is_dark_mode !== undefined && typeof is_dark_mode !== "boolean") {
+        res.status(400).json({ error: "is_dark_mode must be a boolean" });
+        return;
+      }
+
+      const profile = await profileService.updateProfile(id, { full_name, avatar_url, location, is_dark_mode });
       res.json(profile);
     } catch (error) {
       console.error("Update profile error:", error);

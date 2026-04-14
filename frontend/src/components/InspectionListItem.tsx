@@ -3,6 +3,7 @@ import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { Card, CardContent } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
+import { MapPin, Hash } from "lucide-react";
 
 interface InspectionListItemProps {
   inspection: Inspection;
@@ -11,41 +12,57 @@ interface InspectionListItemProps {
 }
 
 export function InspectionListItem({ inspection, onClick, className }: InspectionListItemProps) {
+  const surfaceByClass = {
+    fresh: "bg-[hsl(var(--fresh)/0.14)]",
+    acceptable: "bg-[hsl(var(--acceptable)/0.14)]",
+    warning: "bg-[hsl(var(--warning)/0.14)]",
+    spoiled: "bg-[hsl(var(--spoiled)/0.14)]",
+  }[inspection.classification];
+
   return (
     <Card
-      className={cn("cursor-pointer transition-colors hover:bg-surface-elevated", className)}
+      className={cn(
+        "cursor-pointer rounded-2xl border border-border/70 bg-card/95 transition-all hover:-translate-y-0.5 hover:shadow-[0_16px_35px_-24px_rgba(0,0,0,0.75)]",
+        className
+      )}
       onClick={onClick}
     >
-      <CardContent className="flex items-center gap-4 p-4">
+      <CardContent className="flex items-center gap-3 p-3">
         {inspection.image_url ? (
-          <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-md border border-border">
+          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-border/70">
             <img src={inspection.image_url} alt="Sample" className="h-full w-full object-cover" />
           </div>
         ) : (
-          <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-md border border-border bg-secondary">
-            <span className="font-display text-lg text-muted-foreground">
-              {inspection.meat_type[0].toUpperCase()}
-            </span>
+          <div className={cn("flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border border-border/70", surfaceByClass)}>
+            <span className="font-display text-lg text-muted-foreground">{inspection.meat_type[0].toUpperCase()}</span>
           </div>
         )}
-        <div className="flex-1 min-w-0">
-          <div className="flex items-center justify-between gap-2">
-            <p className="font-display text-sm font-semibold capitalize truncate">
-              {inspection.meat_type}
-            </p>
+
+        <div className="min-w-0 flex-1">
+          <div className="mb-1 flex items-center justify-between gap-2">
+            <span className="rounded-full border border-border/70 bg-background/65 px-2 py-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
+              {format(new Date(inspection.created_at), "MMM d, yyyy")}
+            </span>
             <FreshnessBadge classification={inspection.classification} size="sm" />
           </div>
-          <p className="text-xs text-muted-foreground mt-1">
-            {format(new Date(inspection.created_at), "MMM d, yyyy · h:mm a")}
-          </p>
+
+          <p className="font-display text-sm font-semibold capitalize truncate">{inspection.meat_type}</p>
+          <p className="text-xs text-muted-foreground mt-0.5">{format(new Date(inspection.created_at), "h:mm a")}</p>
+
           {inspection.location && (
-            <p className="text-xs text-muted-foreground truncate">{inspection.location}</p>
+            <p className="mt-1 flex items-center gap-1 truncate text-xs text-muted-foreground">
+              <MapPin className="h-3 w-3 flex-shrink-0" />
+              {inspection.location}
+            </p>
           )}
         </div>
-        <div className="text-right flex-shrink-0">
+
+        <div className="flex-shrink-0 text-right">
           <p className="font-display text-lg font-bold">{inspection.confidence_score}%</p>
-          <p className="text-[10px] font-display uppercase tracking-widest text-muted-foreground">
-            conf
+          <p className="text-[10px] uppercase tracking-widest text-muted-foreground">confidence</p>
+          <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
+            <Hash className="h-3 w-3" />
+            {inspection.id.slice(0, 6)}
           </p>
         </div>
       </CardContent>

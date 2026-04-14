@@ -35,3 +35,6 @@ backend/uploads/
 # Frontend cache
 frontend/.vite/
 frontend/.eslintcache
+
+# hidden files
+docs

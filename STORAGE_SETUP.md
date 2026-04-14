@@ -66,7 +66,7 @@ Storage policies in Supabase must be created through the Dashboard (not via migr
 (bucket_id = 'inspection-images' AND public.has_role(auth.uid(), 'admin'))
 ```
 
-#### Policy 6: Public Can View Images
+#### Policy 6: Public Can View Images (NOT PUT FOR REASONS AND CHANGES, THIS SHOULDN'T EXIST ANYWAY.)
 - **Policy name:** Public can view inspection images
 - **Allowed operation:** SELECT
 - **Target roles:** public

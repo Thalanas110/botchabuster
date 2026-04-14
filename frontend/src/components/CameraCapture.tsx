@@ -25,51 +25,36 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
     setIsStreaming(true);
     setCapturedImage(null);
     setIsVideoReady(false);
-    console.log("Starting camera...");
 
-    await new Promise(resolve => setTimeout(resolve, 50));
+    await new Promise((resolve) => setTimeout(resolve, 50));
 
     try {
       let mediaStream: MediaStream | null = null;
 
       try {
-        const constraints = {
+        mediaStream = await navigator.mediaDevices.getUserMedia({
           video: {
             facingMode: { ideal: "environment" },
             width: { ideal: 1280 },
             height: { ideal: 960 },
           },
-        };
-        console.log("Requesting camera with constraints:", constraints);
-        mediaStream = await navigator.mediaDevices.getUserMedia(constraints);
-      } catch (firstErr) {
-        console.warn("Failed with environment camera, trying default:", firstErr);
+        });
+      } catch {
         mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
       }
 
-      console.log("Got media stream:", mediaStream.getTracks());
-
       if (videoRef.current) {
-        console.log("Setting video srcObject");
         videoRef.current.srcObject = mediaStream;
         setStream(mediaStream);
-
-        try {
-          await videoRef.current.play();
-          console.log("Video playing");
-        } catch (playErr) {
-          console.error("Video play failed:", playErr);
-        }
+        await videoRef.current.play();
       } else {
-        console.error("Video ref is null");
         setError("Video element not available");
         setIsStreaming(false);
         if (mediaStream) {
-          mediaStream.getTracks().forEach(track => track.stop());
+          mediaStream.getTracks().forEach((track) => track.stop());
         }
       }
     } catch (err) {
-      console.error("Camera access error:", err);
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
       toast.error(`Camera error: ${errorMessage}`);
@@ -83,22 +68,13 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
     const video = videoRef.current;
     if (!video || !stream) return;
 
-    const handleLoadedMetadata = () => {
-      console.log("Video metadata loaded:", video.videoWidth, "x", video.videoHeight);
-      setIsVideoReady(true);
-    };
-
-    const handleCanPlay = () => {
-      console.log("Video can play");
-      setIsVideoReady(true);
-    };
+    const handleLoadedMetadata = () => setIsVideoReady(true);
+    const handleCanPlay = () => setIsVideoReady(true);
 
     video.addEventListener("loadedmetadata", handleLoadedMetadata);
     video.addEventListener("canplay", handleCanPlay);
 
-    // Check if video is already ready
     if (video.readyState >= 2) {
-      console.log("Video already ready, setting isVideoReady");
       setIsVideoReady(true);
     }
 
@@ -162,7 +138,7 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
 
   const retake = useCallback(() => {
     setCapturedImage(null);
-    startCamera();
+    void startCamera();
   }, [startCamera]);
 
   const handleFileInput = useCallback(
@@ -180,23 +156,17 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
 
   return (
     <div className={cn("flex flex-col items-center gap-4", className)}>
-      <div className="relative w-full overflow-hidden rounded-lg border-2 border-border bg-secondary aspect-[4/3]">
+      <div className="relative w-full overflow-hidden rounded-2xl border border-border/70 bg-secondary aspect-[4/3] shadow-inner">
         {capturedImage ? (
           <img src={capturedImage} alt="Captured" className="h-full w-full object-cover" />
         ) : isStreaming ? (
           <>
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              className="h-full w-full object-cover"
-            />
+            <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />
 
             {!isVideoReady && (
               <div className="absolute inset-0 flex items-center justify-center bg-secondary/80">
                 <div className="text-center text-muted-foreground">
-                  <Camera className="h-12 w-12 mx-auto mb-2 animate-pulse" />
+                  <Camera className="mx-auto mb-2 h-12 w-12 animate-pulse" />
                   <p className="font-display text-xs uppercase tracking-wider">Starting camera...</p>
                 </div>
               </div>
@@ -204,14 +174,10 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
 
             {isVideoReady && (
               <>
-                {/* Calibration card overlay guide */}
-                <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
-                  <div className="border-2 border-dashed border-primary/50 rounded-md w-16 h-10 absolute bottom-4 right-4" />
-                  <p className="absolute bottom-16 right-2 text-[10px] font-display text-primary/70 uppercase tracking-wide">
-                    Place color card here
-                  </p>
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div className="absolute bottom-4 right-4 h-10 w-16 rounded-md border-2 border-dashed border-primary/50" />
+                  <p className="absolute bottom-16 right-2 text-[10px] uppercase tracking-wide text-primary/70">Place color card here</p>
                 </div>
-                {/* Scanning animation */}
                 <div className="absolute inset-x-0 h-0.5 bg-primary/60 animate-scan-line" />
               </>
             )}
@@ -220,11 +186,7 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
           <div className="flex h-full flex-col items-center justify-center gap-3 text-muted-foreground">
             <Camera className="h-12 w-12" />
             <p className="font-display text-xs uppercase tracking-wider">Ready to capture</p>
-            {error && (
-              <p className="text-[10px] text-destructive px-4 text-center mt-2">
-                Error: {error}
-              </p>
-            )}
+            {error && <p className="mt-2 px-4 text-center text-[10px] text-destructive">Error: {error}</p>}
           </div>
         )}
         <canvas ref={canvasRef} className="hidden" />
@@ -233,34 +195,24 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
       <div className="flex w-full gap-3">
         {capturedImage ? (
           <>
-            <Button variant="outline" onClick={retake} className="flex-1 gap-2">
+            <Button variant="outline" onClick={retake} className="flex-1 gap-2 rounded-xl">
               <RotateCcw className="h-4 w-4" /> Retake
             </Button>
-            <Button onClick={confirmCapture} className="flex-1 gap-2">
+            <Button onClick={confirmCapture} className="flex-1 gap-2 rounded-xl">
               <Check className="h-4 w-4" /> Use Photo
             </Button>
           </>
         ) : isStreaming ? (
-          <Button
-            onClick={capturePhoto}
-            size="lg"
-            className="w-full gap-2"
-            disabled={!isVideoReady}
-          >
+          <Button onClick={capturePhoto} size="lg" className="w-full gap-2 rounded-xl" disabled={!isVideoReady}>
             <Camera className="h-5 w-5" /> {isVideoReady ? "Capture" : "Starting..."}
           </Button>
         ) : (
           <div className="flex w-full gap-3">
-            <Button
-              onClick={startCamera}
-              size="lg"
-              className="flex-1 gap-2"
-              disabled={isStarting}
-            >
+            <Button onClick={() => void startCamera()} size="lg" className="flex-1 gap-2 rounded-xl" disabled={isStarting}>
               <Camera className="h-5 w-5" /> {isStarting ? "Starting..." : "Open Camera"}
             </Button>
-            <label>
-              <Button variant="outline" size="lg" className="gap-2 cursor-pointer" asChild>
+            <label className="flex-1">
+              <Button variant="outline" size="lg" className="w-full cursor-pointer gap-2 rounded-xl" asChild>
                 <span>Upload File</span>
               </Button>
               <input type="file" accept="image/*" className="hidden" onChange={handleFileInput} />

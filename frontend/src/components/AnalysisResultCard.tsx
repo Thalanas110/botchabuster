@@ -11,43 +11,28 @@ interface AnalysisResultCardProps {
 
 export function AnalysisResultCard({ result, className }: AnalysisResultCardProps) {
   return (
-    <div className={cn("space-y-4", className)}>
-      {/* Classification Header */}
-      <Card>
+    <div className={cn("space-y-3", className)}>
+      <Card className="rounded-2xl border-border/70 bg-card/95">
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base font-display uppercase tracking-wider">
-              Classification
-            </CardTitle>
+            <CardTitle className="text-base font-display uppercase tracking-wider">Classification</CardTitle>
             <FreshnessBadge classification={result.classification} size="lg" />
           </div>
         </CardHeader>
         <CardContent>
-          <div className="flex items-center gap-3">
-            <div className="flex-1">
-              <p className="text-[10px] font-display uppercase tracking-widest text-muted-foreground">
-                Confidence
-              </p>
-              <div className="mt-1 flex items-center gap-2">
-                <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-                  <div
-                    className="h-full rounded-full bg-primary transition-all"
-                    style={{ width: `${result.confidence_score}%` }}
-                  />
-                </div>
-                <span className="font-display text-sm font-bold">{result.confidence_score}%</span>
-              </div>
+          <p className="text-[10px] font-display uppercase tracking-widest text-muted-foreground">Confidence</p>
+          <div className="mt-1 flex items-center gap-2">
+            <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${result.confidence_score}%` }} />
             </div>
+            <span className="font-display text-sm font-bold">{result.confidence_score}%</span>
           </div>
         </CardContent>
       </Card>
 
-      {/* Lab* Color Values */}
-      <Card>
+      <Card className="rounded-2xl border-border/70 bg-card/95">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-display uppercase tracking-wider">
-            Lab* Color Space
-          </CardTitle>
+          <CardTitle className="text-sm font-display uppercase tracking-wider">Lab* Color Space</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-3 gap-2">
@@ -58,12 +43,9 @@ export function AnalysisResultCard({ result, className }: AnalysisResultCardProp
         </CardContent>
       </Card>
 
-      {/* GLCM Texture Features */}
-      <Card>
+      <Card className="rounded-2xl border-border/70 bg-card/95">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-display uppercase tracking-wider">
-            GLCM Texture
-          </CardTitle>
+          <CardTitle className="text-sm font-display uppercase tracking-wider">GLCM Texture</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid grid-cols-2 gap-2">
@@ -75,24 +57,19 @@ export function AnalysisResultCard({ result, className }: AnalysisResultCardProp
         </CardContent>
       </Card>
 
-      {/* Explanation */}
-      <Card>
+      <Card className="rounded-2xl border-border/70 bg-card/95">
         <CardHeader className="pb-3">
-          <CardTitle className="text-sm font-display uppercase tracking-wider">
-            Analysis
-          </CardTitle>
+          <CardTitle className="text-sm font-display uppercase tracking-wider">Analysis</CardTitle>
         </CardHeader>
         <CardContent>
-          <p className="text-sm text-secondary-foreground leading-relaxed">{result.explanation}</p>
+          <p className="text-sm leading-relaxed text-secondary-foreground">{result.explanation}</p>
           {result.flagged_deviations.length > 0 && (
             <div className="mt-3">
-              <p className="text-[10px] font-display uppercase tracking-widest text-warning mb-2">
-                Flagged Deviations
-              </p>
+              <p className="mb-2 text-[10px] font-display uppercase tracking-widest text-warning">Flagged Deviations</p>
               <ul className="space-y-1">
                 {result.flagged_deviations.map((d, i) => (
                   <li key={i} className="flex items-start gap-2 text-xs text-muted-foreground">
-                    <span className="text-warning mt-0.5">▲</span>
+                    <span className="mt-0.5 text-warning">*</span>
                     {d}
                   </li>
                 ))}

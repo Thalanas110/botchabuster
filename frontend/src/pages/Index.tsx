@@ -1,13 +1,12 @@
 import { useState, useCallback } from "react";
 import { CameraCapture } from "@/components/CameraCapture";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
-import { PageHeader } from "@/components/PageHeader";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnalyzeImage } from "@/hooks/useAnalysis";
 import { useCreateInspection } from "@/hooks/useInspections";
 import type { AnalysisResult, MeatType } from "@/types/inspection";
-import { Loader2, Save, RotateCcw } from "lucide-react";
+import { Loader2, Save, RotateCcw, Microscope, TestTube2, Camera, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadClient } from "@/integrations/api";
@@ -45,11 +44,8 @@ const InspectPage = () => {
       setResult(analysisResult);
       toast.success("Analysis complete");
     } catch {
-      // Mock result for demo when backend isn't running
       const mockResult: AnalysisResult = {
-        classification: (["fresh", "acceptable", "warning", "spoiled"] as const)[
-          Math.floor(Math.random() * 4)
-        ],
+        classification: (["fresh", "acceptable", "warning", "spoiled"] as const)[Math.floor(Math.random() * 4)],
         confidence_score: Math.round(70 + Math.random() * 25),
         lab_values: {
           l: 45 + Math.random() * 20,
@@ -62,10 +58,7 @@ const InspectPage = () => {
           energy: 0.1 + Math.random() * 0.4,
           homogeneity: 0.5 + Math.random() * 0.45,
         },
-        flagged_deviations: [
-          "Surface discoloration detected in ROI-3",
-          "Moisture index above DOH threshold",
-        ],
+        flagged_deviations: ["Surface discoloration detected in ROI-3", "Moisture index above DOH threshold"],
         explanation:
           "Color analysis indicates slight deviation from DOH freshness standards. Lab* a-channel shows elevated values suggesting early oxidation. GLCM texture features show moderate surface irregularity consistent with initial moisture loss.",
       };
@@ -83,7 +76,6 @@ const InspectPage = () => {
       return;
     }
     try {
-      // Upload the image through the backend API
       let imageUrl: string | null = null;
       try {
         imageUrl = await uploadClient.uploadInspectionImage(capturedFile, user.id);
@@ -121,72 +113,117 @@ const InspectPage = () => {
   }, []);
 
   return (
-    <div className="min-h-screen pb-24">
-      <PageHeader title="Meat Inspector" subtitle="Capture · Analyze · Classify" />
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] pb-24">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-4">
+        <section className="rounded-3xl border border-border/70 bg-card/90 p-4 shadow-[0_24px_70px_-34px_rgba(0,0,0,0.65)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.16)]">
+                <Microscope className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h1 className="font-display text-xl font-semibold tracking-tight">Inspect</h1>
+                <p className="text-xs text-muted-foreground">Capture, analyze, and classify meat freshness</p>
+              </div>
+            </div>
+          </div>
 
-      <div className="px-4 space-y-4">
-        {/* Meat Type Selector */}
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-xs font-display uppercase tracking-widest text-muted-foreground">
-              Sample Type
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex flex-wrap gap-2">
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Sample Type</p>
+              <p className="mt-1 font-display text-2xl font-semibold">{selectedMeat}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.16)] p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Capture Status</p>
+              <p className="mt-1 font-display text-2xl font-semibold">{capturedFile ? "Ready" : "Waiting"}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/65 p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Analysis Status</p>
+              <p className="mt-1 font-display text-2xl font-semibold">
+                {isAnalyzing ? "Running" : result ? result.classification : "Pending"}
+              </p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/65 p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Confidence</p>
+              <p className="mt-1 font-display text-2xl font-semibold">{result ? `${result.confidence_score}%` : "--"}</p>
+            </div>
+          </div>
+        </section>
+
+        <div className="mt-4 grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+          <section className="rounded-3xl border border-border/70 bg-card/92 p-4">
+            <div className="mb-3 flex items-center gap-2 text-sm font-display uppercase tracking-wider text-muted-foreground">
+              <TestTube2 className="h-4 w-4" />
+              Capture Station
+            </div>
+
+            <div className="mb-3 grid grid-cols-2 gap-2 sm:grid-cols-5">
               {meatTypes.map(({ value, label }) => (
-                <Button
+                <button
                   key={value}
-                  variant={selectedMeat === value ? "default" : "outline"}
-                  size="sm"
                   onClick={() => setSelectedMeat(value)}
-                  className="font-display text-xs uppercase tracking-wider"
+                  className={`rounded-xl border px-2 py-2 text-[11px] uppercase tracking-widest transition-colors ${
+                    selectedMeat === value
+                      ? "border-primary/40 bg-[hsl(var(--primary)/0.16)] text-foreground"
+                      : "border-border/60 bg-background/60 text-muted-foreground hover:text-foreground"
+                  }`}
                 >
                   {label}
-                </Button>
+                </button>
               ))}
             </div>
-          </CardContent>
-        </Card>
 
-        {/* Camera */}
-        <CameraCapture onCapture={handleCapture} />
+            <CameraCapture onCapture={handleCapture} />
 
-        {/* Analyze Button */}
-        {capturedFile && !result && (
-          <Button
-            onClick={handleAnalyze}
-            disabled={isAnalyzing}
-            size="lg"
-            className="w-full gap-2 font-display uppercase tracking-wider"
-          >
-            {isAnalyzing ? (
-              <>
-                <Loader2 className="h-5 w-5 animate-spin" /> Processing...
-              </>
-            ) : (
-              "Analyze Sample"
+            {capturedFile && !result && (
+              <div className="mt-4">
+                <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="w-full gap-2 rounded-xl font-display uppercase tracking-wider">
+                  {isAnalyzing ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" /> Processing...
+                    </>
+                  ) : (
+                    <>
+                      <ScanLine className="h-5 w-5" /> Analyze Sample
+                    </>
+                  )}
+                </Button>
+              </div>
             )}
-          </Button>
-        )}
+          </section>
 
-        {/* Results */}
+          <section className="rounded-3xl border border-border/70 bg-card/92 p-4">
+            <div className="mb-3 flex items-center justify-between gap-2">
+              <h2 className="font-display text-base font-semibold">Analysis Output</h2>
+              <span className="rounded-full border border-border/70 bg-background/55 px-3 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
+                {result ? "Ready" : "Awaiting"}
+              </span>
+            </div>
+
+            {result ? (
+              <AnalysisResultCard result={result} />
+            ) : (
+              <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-border/70 bg-background/50 text-center text-muted-foreground">
+                <Camera className="mb-3 h-10 w-10" />
+                <p className="font-display text-sm uppercase tracking-wider">No analysis yet</p>
+                <p className="mt-1 max-w-xs text-xs">Capture a sample and run analysis to view freshness classification and metrics.</p>
+              </div>
+            )}
+          </section>
+        </div>
+
         {result && (
-          <>
-            <AnalysisResultCard result={result} />
-            <div className="flex gap-3">
-              <Button variant="outline" onClick={handleReset} className="flex-1 gap-2">
+          <section className="mt-4 rounded-3xl border border-border/70 bg-card/92 p-4">
+            <div className="flex flex-col gap-3 sm:flex-row">
+              <Button variant="outline" onClick={handleReset} className="flex-1 gap-2 rounded-xl">
                 <RotateCcw className="h-4 w-4" /> New Scan
               </Button>
-              <Button
-                onClick={handleSave}
-                disabled={createInspection.isPending}
-                className="flex-1 gap-2"
-              >
-                <Save className="h-4 w-4" /> Save Record
+              <Button onClick={handleSave} disabled={createInspection.isPending} className="flex-1 gap-2 rounded-xl">
+                {createInspection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                Save Record
               </Button>
             </div>
-          </>
+          </section>
         )}
       </div>
     </div>

@@ -58,9 +58,9 @@ const InspectPage = () => {
           energy: 0.1 + Math.random() * 0.4,
           homogeneity: 0.5 + Math.random() * 0.45,
         },
-        flagged_deviations: ["Surface discoloration detected in ROI-3", "Moisture index above DOH threshold"],
+        flagged_deviations: ["Surface discoloration detected in ROI-3", "Moisture index above NMIS threshold"],
         explanation:
-          "Color analysis indicates slight deviation from DOH freshness standards. Lab* a-channel shows elevated values suggesting early oxidation. GLCM texture features show moderate surface irregularity consistent with initial moisture loss.",
+          "Color analysis indicates slight deviation from NMIS freshness standards. Lab* a-channel shows elevated values suggesting early oxidation. GLCM texture features show moderate surface irregularity consistent with initial moisture loss.",
       };
       setResult(mockResult);
       toast.info("Using simulated analysis (backend offline)");

@@ -32,7 +32,7 @@ backend/
 │   │   ├── ImageProcessingService.ts   # OpenCV operations
 │   │   ├── ColorAnalysisService.ts     # Lab* color extraction
 │   │   ├── TextureAnalysisService.ts   # GLCM feature extraction
-│   │   ├── ClassificationService.ts    # DOH standards evaluation
+│   │   ├── ClassificationService.ts    # NMIS standards evaluation
 │   │   └── CalibrationService.ts       # Color card calibration
 │   ├── models/
 │   │   └── InspectionResult.ts

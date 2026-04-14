@@ -1,10 +1,10 @@
 /**
  * ClassificationService
  * 
- * Evaluates extracted Lab* and GLCM features against DOH (Department of Health)
+ * Evaluates extracted Lab* and GLCM features against NMIS (Department of Health)
  * meat freshness indicator standards to produce a classification.
  * 
- * DOH Standards Reference:
+ * NMIS Standards Reference:
  * - Fresh meat: bright red color (high a*), firm texture, no off-odor
  * - Acceptable: slight color change, texture still firm
  * - Warning: noticeable discoloration, surface moisture changes
@@ -35,7 +35,7 @@ interface MeatStandard {
 export class ClassificationService {
   private static instance: ClassificationService;
 
-  // DOH-based thresholds by meat type
+  // NMIS-based thresholds by meat type
   private readonly standards: Record<string, Record<FreshnessClass, MeatStandard>> = {
     pork: {
       fresh: {
@@ -208,9 +208,9 @@ export class ClassificationService {
     deviations: string[]
   ): string {
     const descriptions: Record<FreshnessClass, string> = {
-      fresh: `${meatType} sample shows characteristics consistent with fresh meat per DOH standards. Lab* color values indicate healthy pigmentation with adequate myoglobin oxygenation. GLCM texture analysis shows uniform surface consistent with firm, fresh tissue.`,
+      fresh: `${meatType} sample shows characteristics consistent with fresh meat per NMIS standards. Lab* color values indicate healthy pigmentation with adequate myoglobin oxygenation. GLCM texture analysis shows uniform surface consistent with firm, fresh tissue.`,
       acceptable: `${meatType} sample falls within acceptable range but shows minor deviations from ideal freshness. Color values suggest early-stage changes in myoglobin state. Texture remains largely uniform.`,
-      warning: `${meatType} sample shows concerning indicators. Color analysis reveals significant deviation from DOH freshness standards, potentially indicating onset of metmyoglobin formation. Surface texture shows increasing irregularity.`,
+      warning: `${meatType} sample shows concerning indicators. Color analysis reveals significant deviation from NMIS freshness standards, potentially indicating onset of metmyoglobin formation. Surface texture shows increasing irregularity.`,
       spoiled: `${meatType} sample exhibits strong indicators of spoilage. Lab* values indicate advanced discoloration consistent with bacterial decomposition. GLCM features show significant surface degradation and moisture abnormalities.`,
     };
 

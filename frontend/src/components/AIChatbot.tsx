@@ -10,7 +10,7 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 export function AIChatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: "Hi! I'm MeatLens AI. Ask me about meat freshness, DOH standards, or how to use the app." },
+    { role: "assistant", content: "Hi! I'm MeatLens AI. Ask me about meat freshness, NMIS standards, or how to use the app." },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

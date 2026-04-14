@@ -55,7 +55,7 @@ const ProfilePage = () => {
 
   useEffect(() => {
     const storedTheme = window.localStorage.getItem("meatlens-theme");
-    const isLight = storedTheme === "light";
+    const isLight = storedTheme !== "dark";
     setIsLightMode(isLight);
     document.documentElement.dataset.theme = isLight ? "light" : "dark";
   }, []);

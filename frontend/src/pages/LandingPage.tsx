@@ -1,32 +1,70 @@
+import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { statsClient } from "@/integrations/api";
 import {
-  ShieldCheck, Camera, BarChart3, Zap, ChevronRight, Star,
+  ShieldCheck,
+  Camera,
+  BarChart3,
+  Zap,
+  ChevronRight,
+  Star,
+  Users,
+  ClipboardCheck,
+  TrendingUp,
+  Sparkles,
+  ScanLine,
+  CheckCircle2,
 } from "lucide-react";
-import { HeroSection } from "@/components/landing/HeroSection";
-import { StatsSection } from "@/components/landing/StatsSection";
 
 const features = [
   {
     icon: Camera,
-    title: "Computer Vision Analysis",
-    desc: "Capture meat samples and extract Lab* color space metrics and GLCM texture features using OpenCV.",
+    title: "Computer Vision Capture",
+    desc: "Capture meat samples on-site and extract Lab* and GLCM signals for objective freshness scoring.",
+    tint: "bg-[hsl(var(--warning)/0.16)]",
   },
   {
     icon: ShieldCheck,
-    title: "DOH Standards Compliance",
-    desc: "Evaluate freshness against Department of Health meat indicator standards with objective classification.",
+    title: "NMIS Standard Alignment",
+    desc: "Classify every sample against health-guided freshness indicators with a consistent decision framework.",
+    tint: "bg-[hsl(var(--primary)/0.16)]",
   },
   {
     icon: BarChart3,
-    title: "Inspection Records",
-    desc: "Store and review inspection history with detailed color and texture feature breakdowns.",
+    title: "Actionable Record History",
+    desc: "Track inspections over time with confidence trends, feature metrics, and searchable evidence.",
+    tint: "bg-background/60",
   },
   {
     icon: Zap,
-    title: "Fast Mobile Inference",
-    desc: "Optimized PWA for wet market environments — works offline with instant capture and analysis.",
+    title: "Built for Field Speed",
+    desc: "Optimized mobile-first workflow for wet market environments where quick decisions matter.",
+    tint: "bg-background/60",
+  },
+];
+
+const workflow = [
+  {
+    icon: Camera,
+    title: "Capture",
+    desc: "Take or upload sample photo",
+  },
+  {
+    icon: ScanLine,
+    title: "Analyze",
+    desc: "Run color and texture checks",
+  },
+  {
+    icon: CheckCircle2,
+    title: "Classify",
+    desc: "Get freshness category + confidence",
+  },
+  {
+    icon: ClipboardCheck,
+    title: "Record",
+    desc: "Save official inspection log",
   },
 ];
 
@@ -34,163 +72,248 @@ const testimonials = [
   {
     name: "Maria Santos",
     role: "Barangay Health Inspector",
-    quote: "MeatLens has transformed how we conduct market inspections. The objective data gives us confidence in our assessments.",
+    quote:
+      "MeatLens helped us standardize inspections. It is easier to explain findings when you have objective values.",
     rating: 5,
   },
   {
     name: "Carlos Reyes",
     role: "Municipal Food Safety Officer",
-    quote: "The Lab* color analysis catches freshness issues that visual inspection alone might miss. Essential tool for public health.",
+    quote:
+      "The app catches subtle quality issues that pure visual checks can miss, especially in crowded market shifts.",
     rating: 5,
   },
   {
     name: "Ana Dela Cruz",
     role: "Wet Market Inspector",
-    quote: "Easy to use on my phone right at the market stall. The reports help me explain findings to vendors clearly.",
+    quote:
+      "Simple mobile flow, fast analysis, and clean records. It made our daily inspection routine much smoother.",
     rating: 4,
   },
 ];
 
+const classifications = [
+  { label: "Fresh", className: "bg-fresh/20 text-fresh border-fresh/40" },
+  { label: "Acceptable", className: "bg-acceptable/20 text-acceptable border-acceptable/40" },
+  { label: "Warning", className: "bg-warning/20 text-warning border-warning/40" },
+  { label: "Spoiled", className: "bg-spoiled/20 text-spoiled border-spoiled/40" },
+];
+
 const LandingPage = () => {
   const { user } = useAuth();
+  const [inspectionCount, setInspectionCount] = useState(0);
+  const [userCount, setUserCount] = useState(0);
+  const [freshRate, setFreshRate] = useState(0);
+
+  useEffect(() => {
+    let mounted = true;
+    async function fetchStats() {
+      try {
+        const stats = await statsClient.getLandingPageStats();
+        if (!mounted) return;
+        setInspectionCount(stats.inspectionCount);
+        setUserCount(stats.userCount);
+        setFreshRate(stats.freshRate);
+      } catch (err) {
+        console.error("Failed to fetch landing stats:", err);
+      }
+    }
+    void fetchStats();
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const statCards = useMemo(
+    () => [
+      {
+        icon: Users,
+        value: userCount.toLocaleString(),
+        label: "Registered Inspectors",
+        className: "bg-[hsl(var(--warning)/0.16)]",
+      },
+      {
+        icon: ClipboardCheck,
+        value: inspectionCount.toLocaleString(),
+        label: "Completed Inspections",
+        className: "bg-[hsl(var(--primary)/0.16)]",
+      },
+      {
+        icon: TrendingUp,
+        value: `${freshRate}%`,
+        label: "Average Fresh Detection",
+        className: "bg-background/65",
+      },
+    ],
+    [inspectionCount, userCount, freshRate]
+  );
 
   return (
-    <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 border-b border-border">
-        <div className="flex items-center gap-2">
-          <ShieldCheck className="h-6 w-6 text-primary" />
-          <span className="font-display text-lg font-bold uppercase tracking-wider">MeatLens</span>
-        </div>
-        <div className="flex items-center gap-3">
-          {user ? (
-            <Link to="/inspect">
-              <Button size="sm" className="font-display uppercase tracking-wider gap-1">
-                Open App <ChevronRight className="h-4 w-4" />
-              </Button>
-            </Link>
-          ) : (
-            <>
-              <Link to="/login">
-                <Button variant="ghost" size="sm" className="font-display uppercase tracking-wider">
-                  Sign In
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))]">
+      <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
+        <div className="mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-3 px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-[hsl(var(--primary)/0.16)]">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+            </div>
+            <div>
+              <p className="font-display text-sm font-semibold uppercase tracking-wider">MeatLens</p>
+              <p className="text-[10px] text-muted-foreground">Inspection Intelligence</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {user ? (
+              <Link to="/inspect">
+                <Button size="sm" className="rounded-xl font-display uppercase tracking-wider gap-1">
+                  Open App <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
-              <Link to="/signup">
-                <Button size="sm" className="font-display uppercase tracking-wider">
-                  Get Started
-                </Button>
-              </Link>
-            </>
-          )}
+            ) : (
+              <>
+                <Link to="/login">
+                  <Button variant="ghost" size="sm" className="rounded-xl font-display uppercase tracking-wider">
+                    Sign In
+                  </Button>
+                </Link>
+                <Link to="/signup">
+                  <Button size="sm" className="rounded-xl font-display uppercase tracking-wider">
+                    Get Started
+                  </Button>
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </header>
 
-      <HeroSection />
+      <main className="mx-auto w-full max-w-6xl min-w-0 px-4 py-6 sm:py-8">
+        <section className="rounded-3xl border border-border/70 bg-card/92 p-5 shadow-[0_26px_70px_-36px_rgba(0,0,0,0.72)] sm:p-6">
+          <div className="grid min-w-0 gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div className="min-w-0">
+              <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/35 bg-[hsl(var(--primary)/0.16)] px-3 py-1.5">
+                <Sparkles className="h-3.5 w-3.5 text-primary" />
+                <span className="font-display text-[11px] uppercase tracking-widest text-primary">AI-assisted Field Inspection</span>
+              </div>
 
-      <StatsSection />
+              <h1 className="font-display text-3xl font-bold uppercase leading-[1.1] tracking-tight sm:text-4xl lg:text-5xl">
+                Objective Meat Freshness Checks,
+                <span className="text-primary"> Designed for Real Market Flow</span>
+              </h1>
 
-      {/* Features */}
-      <section className="px-6 py-16 border-t border-border">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="font-display text-xs uppercase tracking-widest text-muted-foreground text-center mb-10">
-            How it works
-          </h2>
-          <div className="grid gap-6 sm:grid-cols-2">
-            {features.map((f) => (
-              <div
-                key={f.title}
-                className="rounded-lg border border-border bg-card p-6 transition-colors hover:border-primary/30"
-              >
-                <f.icon className="h-8 w-8 text-primary mb-4" />
-                <h3 className="font-display text-sm font-semibold uppercase tracking-wider mb-2">
-                  {f.title}
-                </h3>
-                <p className="text-sm text-muted-foreground leading-relaxed">{f.desc}</p>
+              <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+                MeatLens helps inspectors perform faster and more consistent decisions using image-based color and texture analytics aligned to health guidance.
+              </p>
+
+              <div className="mt-6 flex flex-wrap gap-2">
+                <Link to={user ? "/inspect" : "/signup"}>
+                  <Button size="lg" className="rounded-xl px-7 font-display text-xs uppercase tracking-wider gap-2">
+                    {user ? "Start Inspecting" : "Create Inspector Account"}
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </Link>
+                <Link to={user ? "/history" : "/login"}>
+                  <Button variant="outline" size="lg" className="rounded-xl px-6 font-display text-xs uppercase tracking-wider">
+                    {user ? "View History" : "Sign In"}
+                  </Button>
+                </Link>
+              </div>
+            </div>
+
+            <div className="grid min-w-0 gap-3 sm:grid-cols-2">
+              {statCards.map((stat) => (
+                <div key={stat.label} className={`rounded-2xl border border-border/70 p-4 ${stat.className}`}>
+                  <stat.icon className="mb-2 h-5 w-5 text-primary" />
+                  <p className="font-display text-2xl font-semibold sm:text-3xl">{stat.value}</p>
+                  <p className="text-xs text-muted-foreground">{stat.label}</p>
+                </div>
+              ))}
+              <div className="rounded-2xl border border-border/70 bg-background/60 p-4 sm:col-span-2">
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Live Classification Scale</p>
+                <div className="mt-2 flex flex-wrap gap-2">
+                  {classifications.map((c) => (
+                    <span key={c.label} className={`inline-flex items-center rounded-full border px-3 py-1 text-[10px] font-display uppercase tracking-wider ${c.className}`}>
+                      {c.label}
+                    </span>
+                  ))}
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/88 p-4 sm:p-5">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wider text-muted-foreground">Inspection Workflow</h2>
+          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            {workflow.map((step) => (
+              <div key={step.title} className="rounded-2xl border border-border/70 bg-background/55 p-3">
+                <step.icon className="mb-2 h-4 w-4 text-primary" />
+                <p className="font-display text-sm font-semibold uppercase tracking-wider">{step.title}</p>
+                <p className="mt-1 text-xs text-muted-foreground">{step.desc}</p>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Testimonials */}
-      <section className="px-6 py-16 border-t border-border bg-card/30">
-        <div className="max-w-5xl mx-auto">
-          <h2 className="font-display text-xs uppercase tracking-widest text-muted-foreground text-center mb-10">
-            What Inspectors Say
-          </h2>
-          <div className="grid gap-6 sm:grid-cols-3">
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/92 p-4 sm:p-5">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wider text-muted-foreground">Capability Blocks</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {features.map((feature) => (
+              <div key={feature.title} className={`rounded-2xl border border-border/70 p-4 ${feature.tint}`}>
+                <feature.icon className="mb-2 h-5 w-5 text-primary" />
+                <h3 className="font-display text-sm font-semibold uppercase tracking-wider">{feature.title}</h3>
+                <p className="mt-1 text-sm text-muted-foreground">{feature.desc}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/92 p-4 sm:p-5">
+          <h2 className="mb-3 font-display text-sm uppercase tracking-wider text-muted-foreground">Inspector Feedback</h2>
+          <div className="grid gap-3 lg:grid-cols-3">
             {testimonials.map((t) => (
-              <div
-                key={t.name}
-                className="rounded-lg border border-border bg-card p-6"
-              >
-                <div className="flex gap-0.5 mb-3">
-                  {Array.from({ length: t.rating }).map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-accent text-accent" />
+              <div key={t.name} className="rounded-2xl border border-border/70 bg-background/55 p-4">
+                <div className="mb-2 flex gap-0.5">
+                  {Array.from({ length: t.rating }).map((_, idx) => (
+                    <Star key={idx} className="h-3.5 w-3.5 fill-accent text-accent" />
                   ))}
                 </div>
-                <p className="text-sm text-foreground leading-relaxed mb-4 italic">
-                  "{t.quote}"
-                </p>
-                <div>
+                <p className="text-sm leading-relaxed text-foreground">"{t.quote}"</p>
+                <div className="mt-3">
                   <p className="font-display text-xs font-semibold uppercase tracking-wider">{t.name}</p>
                   <p className="text-xs text-muted-foreground">{t.role}</p>
                 </div>
               </div>
             ))}
           </div>
-        </div>
-      </section>
+        </section>
 
-      {/* Classification Scale */}
-      <section className="px-6 py-16 border-t border-border">
-        <div className="max-w-3xl mx-auto text-center">
-          <h2 className="font-display text-xs uppercase tracking-widest text-muted-foreground mb-8">
-            Freshness Classification Scale
-          </h2>
-          <div className="flex justify-center gap-3 flex-wrap">
-            {[
-              { label: "Fresh", className: "bg-fresh/20 text-fresh border-fresh/40" },
-              { label: "Acceptable", className: "bg-acceptable/20 text-acceptable border-acceptable/40" },
-              { label: "Warning", className: "bg-warning/20 text-warning border-warning/40" },
-              { label: "Spoiled", className: "bg-spoiled/20 text-spoiled border-spoiled/40" },
-            ].map((c) => (
-              <span
-                key={c.label}
-                className={`inline-flex items-center rounded-md border px-4 py-2 font-display text-sm font-semibold uppercase tracking-wider ${c.className}`}
-              >
-                {c.label}
-              </span>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* CTA */}
-      <section className="px-6 py-20 border-t border-border text-center">
-        <div className="max-w-xl mx-auto">
-          <h2 className="font-display text-2xl md:text-3xl font-bold uppercase tracking-tight mb-4">
-            Ready to Inspect?
-          </h2>
-          <p className="text-muted-foreground mb-8">
-            Get your access code from your organization administrator and start conducting objective meat freshness assessments today.
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/95 p-6 text-center sm:p-8">
+          <h2 className="font-display text-2xl font-bold uppercase tracking-tight sm:text-3xl">Ready to Inspect?</h2>
+          <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
+            Get your organization access code and start running objective inspections with measurable confidence.
           </p>
-          <Link to={user ? "/inspect" : "/signup"}>
-            <Button size="lg" className="font-display uppercase tracking-wider gap-2 px-10">
-              {user ? "Go to App" : "Get Started Now"}
-              <ChevronRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        </div>
-      </section>
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
+            <Link to={user ? "/inspect" : "/signup"}>
+              <Button size="lg" className="rounded-xl px-10 font-display uppercase tracking-wider gap-2">
+                {user ? "Go to Inspect" : "Get Started Now"}
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </Link>
+            {!user && (
+              <Link to="/login">
+                <Button variant="outline" size="lg" className="rounded-xl px-8 font-display uppercase tracking-wider">
+                  Sign In
+                </Button>
+              </Link>
+            )}
+          </div>
+        </section>
 
-      {/* Footer */}
-      <footer className="px-6 py-8 border-t border-border text-center">
-        <p className="text-xs text-muted-foreground">
-          MeatLens — Built for wet market food safety inspection
-        </p>
-      </footer>
+        <footer className="py-8 text-center">
+          <p className="text-xs text-muted-foreground">MeatLens - built for wet market food safety inspection</p>
+        </footer>
+      </main>
     </div>
   );
 };

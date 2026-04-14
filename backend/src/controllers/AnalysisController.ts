@@ -65,7 +65,7 @@ export class AnalysisController {
       // Step 5: Extract GLCM texture features
       const glcmFeatures = await this.textureService.computeGLCMFeatures(meatROI);
 
-      // Step 6: Classify against DOH standards
+      // Step 6: Classify against NMIS standards
       const classification = this.classificationService.classify(
         labValues,
         glcmFeatures,

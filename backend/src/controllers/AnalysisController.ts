@@ -40,6 +40,16 @@ export class AnalysisController {
       const meatType = (req.body.meat_type as string) || "pork";
       const imagePath = req.file.path;
 
+      const qualityAssessment = await this.imageService.validateImageQuality(imagePath);
+      if (!qualityAssessment.accepted) {
+        res.status(422).json({
+          error: "Image rejected",
+          reasons: qualityAssessment.reasons,
+          metrics: qualityAssessment.metrics,
+        });
+        return;
+      }
+
       // Step 1: Detect calibration card
       const cardDetection = await this.imageService.detectCalibrationCard(imagePath);
 

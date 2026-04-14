@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAnalyzeImage } from "@/hooks/useAnalysis";
 import { useCreateInspection } from "@/hooks/useInspections";
 import type { AnalysisResult, MeatType } from "@/types/inspection";
+import { AnalysisApiError } from "@/integrations/api/AnalysisClient";
 import { Loader2, Save, RotateCcw, Microscope, TestTube2, Camera, ScanLine } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -43,27 +44,15 @@ const InspectPage = () => {
       });
       setResult(analysisResult);
       toast.success("Analysis complete");
-    } catch {
-      const mockResult: AnalysisResult = {
-        classification: (["fresh", "acceptable", "warning", "spoiled"] as const)[Math.floor(Math.random() * 4)],
-        confidence_score: Math.round(70 + Math.random() * 25),
-        lab_values: {
-          l: 45 + Math.random() * 20,
-          a: 10 + Math.random() * 15,
-          b: 8 + Math.random() * 12,
-        },
-        glcm_features: {
-          contrast: Math.random() * 50,
-          correlation: 0.8 + Math.random() * 0.19,
-          energy: 0.1 + Math.random() * 0.4,
-          homogeneity: 0.5 + Math.random() * 0.45,
-        },
-        flagged_deviations: ["Surface discoloration detected in ROI-3", "Moisture index above NMIS threshold"],
-        explanation:
-          "Color analysis indicates slight deviation from NMIS freshness standards. Lab* a-channel shows elevated values suggesting early oxidation. GLCM texture features show moderate surface irregularity consistent with initial moisture loss.",
-      };
-      setResult(mockResult);
-      toast.info("Using simulated analysis (backend offline)");
+    } catch (error) {
+      setResult(null);
+      if (error instanceof AnalysisApiError) {
+        toast.error(error.message);
+      } else if (error instanceof Error) {
+        toast.error(error.message);
+      } else {
+        toast.error("Analysis failed");
+      }
     } finally {
       setIsAnalyzing(false);
     }

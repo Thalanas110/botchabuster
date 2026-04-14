@@ -2,6 +2,16 @@ import type { AnalysisResult } from "@/types/inspection";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
+export class AnalysisApiError extends Error {
+  readonly status: number;
+
+  constructor(message: string, status: number) {
+    super(message);
+    this.name = "AnalysisApiError";
+    this.status = status;
+  }
+}
+
 export class AnalysisClient {
   private static instance: AnalysisClient;
 
@@ -26,7 +36,8 @@ export class AnalysisClient {
 
     if (!response.ok) {
       const data = await response.json().catch(() => ({ error: "Analysis failed" }));
-      throw new Error(data.error || "Analysis failed");
+      const reasonText = Array.isArray(data?.reasons) ? ` ${data.reasons.join(" ")}` : "";
+      throw new AnalysisApiError(`${data?.error || "Analysis failed"}${reasonText}`.trim(), response.status);
     }
 
     return response.json();

@@ -1,8 +1,19 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
-import { Loader2, Copy, LogOut, ShieldCheck, Sun, Moon } from "lucide-react";
-import { PageHeader } from "@/components/PageHeader";
+import {
+  Loader2,
+  Copy,
+  LogOut,
+  ShieldCheck,
+  Sun,
+  Moon,
+  ArrowLeft,
+  Mail,
+  Phone,
+  CalendarDays,
+  UserRound,
+} from "lucide-react";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -32,6 +43,9 @@ const ProfilePage = () => {
       .map((x) => x.charAt(0).toUpperCase())
       .join("");
   }, [fullName, user?.email]);
+
+  const inspectorCode = profile?.inspector_code || "No assigned inspector code";
+  const roleLabel = "Inspector";
 
   useEffect(() => {
     if (!user) return;
@@ -175,122 +189,179 @@ const ProfilePage = () => {
   }
 
   return (
-    <div className="min-h-screen pb-24">
-      <PageHeader title="Profile" subtitle="Inspector account center" />
+    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] pb-24">
+      <div className="mx-auto w-full max-w-6xl px-4 pt-4">
+        <div className="mb-4 flex items-center gap-3 rounded-2xl border border-border/70 bg-card/85 px-3 py-3 backdrop-blur-sm">
+          <button
+            type="button"
+            onClick={() => navigate(-1)}
+            className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background/60 text-foreground transition-colors hover:bg-background"
+            aria-label="Go back"
+          >
+            <ArrowLeft className="h-4 w-4" />
+          </button>
+          <div>
+            <h1 className="font-display text-xl font-semibold tracking-tight">My Profile</h1>
+            <p className="text-xs text-muted-foreground">Inspector account center</p>
+          </div>
+        </div>
 
-      <div className="px-4">
-        <div className="rounded-2xl border-2 border-border/80 bg-card/90 p-4 shadow-[0_20px_55px_-28px_rgba(0,0,0,0.7)]">
-          <div className="grid gap-4 lg:grid-cols-[0.42fr_0.58fr]">
-            <section className="space-y-4">
-              <div className="overflow-hidden rounded-xl border-2 border-border">
-                <div className="grid min-h-[220px] grid-cols-1 sm:grid-cols-2">
-                  <div className="flex flex-col items-center justify-center gap-3 border-b-2 border-border p-4 sm:border-b-0 sm:border-r-2">
-                    <Avatar className="h-24 w-24 border-2 border-border">
-                      <AvatarImage src={profile?.avatar_url ?? undefined} alt="Profile avatar" />
-                      <AvatarFallback className="font-display text-lg uppercase tracking-wider">
-                        {initials || "U"}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="w-full space-y-1">
-                      <Label htmlFor="profile-image" className="text-xs uppercase tracking-widest text-muted-foreground">
-                        Profile Image
-                      </Label>
-                      <Input
-                        id="profile-image"
-                        type="file"
-                        accept="image/*"
-                        onChange={handleAvatarUpload}
-                        disabled={isUploadingAvatar}
-                        className="h-9 text-xs"
-                      />
-                    </div>
+        <div className="grid gap-4 lg:grid-cols-[0.92fr_1.08fr]">
+          <div className="space-y-4">
+            <section className="rounded-3xl border border-border/70 bg-card/95 p-4 shadow-[0_20px_65px_-34px_rgba(0,0,0,0.65)]">
+              <div className="flex items-start justify-between gap-3">
+                <div className="flex items-center gap-3">
+                  <Avatar className="h-16 w-16 border-2 border-border/80">
+                    <AvatarImage src={profile?.avatar_url ?? undefined} alt="Profile avatar" />
+                    <AvatarFallback className="font-display text-base uppercase tracking-wider">{initials || "U"}</AvatarFallback>
+                  </Avatar>
+                  <div>
+                    <h2 className="font-display text-2xl font-semibold leading-tight">{fullName || "Unnamed User"}</h2>
+                    <p className="text-sm text-muted-foreground">{roleLabel}</p>
                   </div>
-                  <div className="flex flex-col justify-center gap-3 p-4">
-                    <div className="flex items-center gap-2 text-xs uppercase tracking-widest text-muted-foreground">
+                </div>
+                <div className="rounded-full border border-border/70 bg-background/70 px-3 py-1 text-[11px] font-display uppercase tracking-widest text-primary">
+                  Active
+                </div>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2">
+                <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background/60 text-foreground">
+                  <Mail className="h-4 w-4" />
+                </button>
+                <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background/60 text-foreground">
+                  <Phone className="h-4 w-4" />
+                </button>
+                <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full border border-border/70 bg-background/60 text-foreground">
+                  <CalendarDays className="h-4 w-4" />
+                </button>
+              </div>
+
+              <div className="mt-4 grid gap-3 xl:grid-cols-[1fr_1fr]">
+                <div className="space-y-1 rounded-xl border border-border/70 bg-background/55 p-3">
+                  <Label htmlFor="profile-image" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Profile Image
+                  </Label>
+                  <Input
+                    id="profile-image"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleAvatarUpload}
+                    disabled={isUploadingAvatar}
+                    className="h-9 text-xs"
+                  />
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/55 p-3">
+                  <div className="mb-1 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-1.5 text-[11px] uppercase tracking-widest text-muted-foreground">
                       <ShieldCheck className="h-3.5 w-3.5" />
                       Access Code
                     </div>
-                    <p className="break-words font-display text-base tracking-wider">
-                      {profile?.inspector_code || "No assigned inspector code"}
-                    </p>
                     {profile?.inspector_code && (
-                      <Button variant="outline" className="w-full gap-2" onClick={handleCopyCode}>
-                        <Copy className="h-4 w-4" />
-                        Copy Code
+                      <Button variant="ghost" size="sm" className="h-7 gap-1 px-2 text-[11px]" onClick={handleCopyCode}>
+                        <Copy className="h-3.5 w-3.5" />
+                        Copy
                       </Button>
                     )}
                   </div>
+                  <p className="break-words font-display text-sm tracking-widest">{inspectorCode}</p>
                 </div>
               </div>
-
-              <Button
-                variant="outline"
-                className="h-12 w-full justify-start gap-2 rounded-xl border-2 border-border text-sm font-display uppercase tracking-wider"
-                onClick={handleThemeToggle}
-              >
-                {isLightMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
-                {isLightMode ? "Dark Mode" : "Light Mode"}
-              </Button>
-
-              <Button
-                variant="outline"
-                className="h-12 w-full justify-start gap-2 rounded-xl border-2 border-border text-sm font-display uppercase tracking-wider"
-                onClick={handleSignOut}
-              >
-                <LogOut className="h-4 w-4" />
-                Sign Out
-              </Button>
             </section>
 
-            <section className="space-y-4">
-              <div className="overflow-hidden rounded-xl border-2 border-border">
-                <div className="space-y-0">
-                  <div className="space-y-2 p-4">
-                    <Label htmlFor="fullName" className="text-xs uppercase tracking-widest text-muted-foreground">
-                      Name
-                    </Label>
-                    <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} />
-                  </div>
-                  <div className="border-t-2 border-border p-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="email" className="text-xs uppercase tracking-widest text-muted-foreground">
-                        Email
-                      </Label>
-                      <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-                    </div>
-                  </div>
+            <section className="rounded-3xl border border-border/70 bg-card/90 p-4">
+              <h3 className="mb-3 font-display text-lg font-semibold">Detailed Information</h3>
+              <div className="space-y-2">
+                <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Full Name</p>
+                  <p className="text-sm font-medium">{fullName || "Not set"}</p>
                 </div>
-                <div className="border-t-2 border-border p-4">
-                  <Button
-                    onClick={handleSaveProfile}
-                    disabled={isSavingProfile || isUploadingAvatar}
-                    className="h-10 rounded-lg font-display text-xs uppercase tracking-widest"
-                  >
-                    {isSavingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
-                    Save Profile
-                  </Button>
+                <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Email Address</p>
+                  <p className="break-all text-sm font-medium">{email || user?.email || "Not set"}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Inspector Code</p>
+                  <p className="text-sm font-medium">{inspectorCode}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Theme</p>
+                  <p className="text-sm font-medium">{isLightMode ? "Light Mode" : "Dark Mode"}</p>
                 </div>
               </div>
+            </section>
+          </div>
 
-              <div className="rounded-xl border-2 border-border p-4">
-                <div className="mb-3 font-display text-sm uppercase tracking-wider text-muted-foreground">
-                  Password Reset Section
+          <div className="space-y-4">
+            <section className="rounded-3xl border border-border/70 bg-card/92 p-4 shadow-[0_18px_55px_-34px_rgba(0,0,0,0.55)]">
+              <div className="grid gap-3 md:grid-cols-2">
+                <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
+                  <Label htmlFor="fullName" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Name
+                  </Label>
+                  <Input id="fullName" value={fullName} onChange={(e) => setFullName(e.target.value)} className="mt-2 bg-background/65" />
                 </div>
-                <div className="space-y-3">
+                <div className="rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.14)] p-3">
+                  <Label htmlFor="email" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                    Email
+                  </Label>
+                  <Input id="email" type="email" value={email} onChange={(e) => setEmail(e.target.value)} className="mt-2 bg-background/65" />
+                </div>
+              </div>
+              <div className="mt-3 flex justify-end">
+                <Button
+                  onClick={handleSaveProfile}
+                  disabled={isSavingProfile || isUploadingAvatar}
+                  className="h-10 rounded-xl px-5 font-display text-xs uppercase tracking-widest"
+                >
+                  {isSavingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <UserRound className="mr-2 h-4 w-4" />}
+                  Save Profile
+                </Button>
+              </div>
+            </section>
+
+            <div className="grid gap-4 md:grid-cols-[1.35fr_0.65fr]">
+              <section className="rounded-3xl border border-border/70 bg-card/92 p-4">
+                <h3 className="font-display text-lg font-semibold">Password Reset Section</h3>
+                <p className="mt-1 text-xs text-muted-foreground">Change password directly while signed in.</p>
+                <div className="mt-4 space-y-3">
                   <Input
                     id="new-password"
                     type="password"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="Enter new password"
+                    className="h-11 rounded-xl bg-background/60"
                   />
-                  <Button onClick={handleUpdatePassword} disabled={isSavingPassword} className="h-10 rounded-lg">
+                  <Button onClick={handleUpdatePassword} disabled={isSavingPassword} className="h-11 rounded-xl px-5">
                     {isSavingPassword ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : null}
                     Update Password
                   </Button>
                 </div>
-              </div>
-            </section>
+              </section>
+
+              <section className="rounded-3xl border border-border/70 bg-card/92 p-4">
+                <h3 className="font-display text-base font-semibold">Actions</h3>
+                <div className="mt-4 space-y-2">
+                  <Button
+                    variant="outline"
+                    onClick={handleThemeToggle}
+                    className="h-11 w-full justify-start gap-2 rounded-xl border border-border/80"
+                  >
+                    {isLightMode ? <Moon className="h-4 w-4" /> : <Sun className="h-4 w-4" />}
+                    {isLightMode ? "Switch to Dark" : "Switch to Light"}
+                  </Button>
+                  <Button
+                    variant="outline"
+                    onClick={handleSignOut}
+                    className="h-11 w-full justify-start gap-2 rounded-xl border border-border/80"
+                  >
+                    <LogOut className="h-4 w-4" />
+                    Sign Out
+                  </Button>
+                </div>
+              </section>
+            </div>
           </div>
         </div>
       </div>

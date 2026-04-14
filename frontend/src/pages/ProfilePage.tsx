@@ -20,11 +20,11 @@ import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
-import { storageService } from "@/integrations/supabase/services/StorageService";
+import { uploadClient } from "@/integrations/api/UploadClient";
 
 const ProfilePage = () => {
   const navigate = useNavigate();
-  const { user, updateEmail, updatePassword, signOut } = useAuth();
+  const { user, isAdmin, updateEmail, updatePassword, signOut } = useAuth();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
@@ -45,7 +45,7 @@ const ProfilePage = () => {
   }, [fullName, user?.email]);
 
   const inspectorCode = profile?.inspector_code || "No assigned inspector code";
-  const roleLabel = "Inspector";
+  const roleLabel = isAdmin ? "Administrator" : "Inspector";
 
   useEffect(() => {
     if (!user) return;
@@ -80,7 +80,7 @@ const ProfilePage = () => {
 
     setIsUploadingAvatar(true);
     try {
-      const avatarUrl = await storageService.uploadInspectionImage(file, user.id);
+      const avatarUrl = await uploadClient.uploadInspectionImage(file, user.id);
       const updated = await profileClient.updateProfile(user.id, { avatar_url: avatarUrl });
       setProfile(updated);
       toast.success("Profile image updated");
@@ -110,7 +110,7 @@ const ProfilePage = () => {
       if (trimmedEmail && trimmedEmail !== (user.email ?? "")) {
         await updateEmail(trimmedEmail);
         changed = true;
-        toast.success("Email update sent. Please confirm from your inbox.");
+        toast.success("Email updated");
       }
 
       if (!changed) {

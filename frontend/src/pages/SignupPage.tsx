@@ -1,7 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { useAuth } from "@/contexts/AuthContext";
-import { accessCodeService } from "@/integrations/supabase/services/AccessCodeService";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -26,13 +25,6 @@ const SignupPage = () => {
     }
     setLoading(true);
     try {
-      // Validate access code first
-      const valid = await accessCodeService.validate(accessCode.trim());
-      if (!valid) {
-        toast.error("Invalid or expired access code. Contact your administrator.");
-        setLoading(false);
-        return;
-      }
       await signUp(email, password, fullName, accessCode.trim());
       toast.success("Account created! Check your email to verify.");
       navigate("/login");

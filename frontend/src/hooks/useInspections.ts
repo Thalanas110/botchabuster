@@ -1,18 +1,18 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { inspectionService } from "@/integrations/supabase/services";
+import { inspectionClient } from "@/integrations/api";
 import type { InspectionInsert } from "@/types/inspection";
 
 export function useInspections(limit = 50) {
   return useQuery({
     queryKey: ["inspections", limit],
-    queryFn: () => inspectionService.getAll(limit),
+    queryFn: () => inspectionClient.getAll(limit),
   });
 }
 
 export function useInspection(id: string) {
   return useQuery({
     queryKey: ["inspection", id],
-    queryFn: () => inspectionService.getById(id),
+    queryFn: () => inspectionClient.getById(id),
     enabled: !!id,
   });
 }
@@ -20,7 +20,7 @@ export function useInspection(id: string) {
 export function useCreateInspection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (data: InspectionInsert) => inspectionService.create(data),
+    mutationFn: (data: InspectionInsert) => inspectionClient.create(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inspections"] });
       queryClient.invalidateQueries({ queryKey: ["inspection-stats"] });
@@ -31,7 +31,7 @@ export function useCreateInspection() {
 export function useDeleteInspection() {
   const queryClient = useQueryClient();
   return useMutation({
-    mutationFn: (id: string) => inspectionService.delete(id),
+    mutationFn: (id: string) => inspectionClient.delete(id),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["inspections"] });
       queryClient.invalidateQueries({ queryKey: ["inspection-stats"] });
@@ -42,6 +42,6 @@ export function useDeleteInspection() {
 export function useInspectionStats() {
   return useQuery({
     queryKey: ["inspection-stats"],
-    queryFn: () => inspectionService.getStatistics(),
+    queryFn: () => inspectionClient.getStatistics(),
   });
 }

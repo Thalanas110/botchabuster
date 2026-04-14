@@ -1,4 +1,4 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
 export interface AccessCode {
   id: string;
@@ -25,6 +25,17 @@ export class AccessCodeClient {
     const res = await fetch(`${API_BASE_URL}/access-codes`);
     if (!res.ok) throw new Error(`Failed to fetch access codes: ${res.statusText}`);
     return res.json();
+  }
+
+  async validate(code: string): Promise<boolean> {
+    const res = await fetch(`${API_BASE_URL}/access-codes/validate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code }),
+    });
+    if (!res.ok) throw new Error(`Failed to validate access code: ${res.statusText}`);
+    const data = await res.json() as { valid: boolean };
+    return data.valid;
   }
 
   async create(code: string, description?: string): Promise<AccessCode> {

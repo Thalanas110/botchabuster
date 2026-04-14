@@ -13,13 +13,19 @@ const ResetPasswordPage = () => {
   const [confirm, setConfirm] = useState("");
   const [loading, setLoading] = useState(false);
   const [isRecovery, setIsRecovery] = useState(false);
-  const { updatePassword } = useAuth();
+  const [accessToken, setAccessToken] = useState("");
+  const { updatePasswordWithRecoveryToken } = useAuth();
   const navigate = useNavigate();
 
   useEffect(() => {
-    const hash = window.location.hash;
-    if (hash.includes("type=recovery")) {
+    const hashValue = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+    const hashParams = new URLSearchParams(hashValue);
+    const recoveryType = hashParams.get("type");
+    const token = hashParams.get("access_token");
+
+    if (recoveryType === "recovery" && token) {
       setIsRecovery(true);
+      setAccessToken(token);
     }
   }, []);
 
@@ -31,9 +37,9 @@ const ResetPasswordPage = () => {
     }
     setLoading(true);
     try {
-      await updatePassword(password);
+      await updatePasswordWithRecoveryToken(accessToken, password);
       toast.success("Password updated!");
-      navigate("/inspect");
+      navigate("/login");
     } catch (err: any) {
       toast.error(err.message || "Failed to update password");
     } finally {

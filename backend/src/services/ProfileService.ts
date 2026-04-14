@@ -61,10 +61,18 @@ export class ProfileService {
   }
 
   async updateProfile(userId: string, updates: Partial<Pick<Profile, "full_name" | "avatar_url" | "location">>): Promise<Profile> {
+    const payload: Record<string, unknown> = {
+      id: userId,
+      updated_at: new Date().toISOString(),
+    };
+
+    if (updates.full_name !== undefined) payload.full_name = updates.full_name;
+    if (updates.avatar_url !== undefined) payload.avatar_url = updates.avatar_url;
+    if (updates.location !== undefined) payload.location = updates.location;
+
     const { data, error } = await (supabase
       .from("profiles") as any)
-      .update({ ...updates, updated_at: new Date().toISOString() })
-      .eq("id", userId)
+      .upsert(payload, { onConflict: "id" })
       .select()
       .single();
     if (error) throw new Error(`Failed to update profile: ${error.message}`);

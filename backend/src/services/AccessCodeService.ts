@@ -30,6 +30,12 @@ export class AccessCodeService {
     return (data as unknown as AccessCode[]) ?? [];
   }
 
+  async validate(code: string): Promise<boolean> {
+    const { data, error } = await supabase.rpc("validate_access_code", { _code: code.trim() });
+    if (error) throw new Error(`Failed to validate access code: ${error.message}`);
+    return Boolean(data);
+  }
+
   async create(code: string, description?: string): Promise<AccessCode> {
     const { data, error } = await (supabase
       .from("access_codes") as any)

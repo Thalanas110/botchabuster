@@ -1,6 +1,6 @@
 import type { Inspection, InspectionInsert } from "@/types/inspection";
 
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3000/api";
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
 export class InspectionClient {
   private static instance: InspectionClient;
@@ -44,6 +44,15 @@ export class InspectionClient {
       method: "DELETE",
     });
     if (!res.ok) throw new Error(`Failed to delete inspection: ${res.statusText}`);
+  }
+
+  async getStatistics(): Promise<{
+    total: number;
+    byClassification: Record<string, number>;
+  }> {
+    const res = await fetch(`${API_BASE_URL}/inspections/stats`);
+    if (!res.ok) throw new Error(`Failed to fetch inspection statistics: ${res.statusText}`);
+    return res.json();
   }
 }
 

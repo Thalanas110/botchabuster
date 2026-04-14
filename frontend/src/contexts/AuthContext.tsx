@@ -1,11 +1,13 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
-import { supabase } from "@/integrations/supabase/client";
+import { authClient, type AuthSession, type AuthUser } from "@/integrations/api/AuthClient";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
-import type { User, Session } from "@supabase/supabase-js";
+
+const USER_STORAGE_KEY = "meatlens-auth-user";
+const SESSION_STORAGE_KEY = "meatlens-auth-session";
 
 interface AuthContextType {
-  user: User | null;
-  session: Session | null;
+  user: AuthUser | null;
+  session: AuthSession | null;
   profile: Profile | null;
   isAdmin: boolean;
   isLoading: boolean;
@@ -13,6 +15,7 @@ interface AuthContextType {
   signUp: (email: string, password: string, fullName: string, accessCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updatePasswordWithRecoveryToken: (accessToken: string, password: string) => Promise<void>;
   updateEmail: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
 }
@@ -20,13 +23,13 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [session, setSession] = useState<Session | null>(null);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  const [session, setSession] = useState<AuthSession | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
-  const loadUserData = useCallback(async (currentUser: User | null) => {
+  const loadUserData = useCallback(async (currentUser: AuthUser | null) => {
     if (!currentUser) {
       setProfile(null);
       setIsAdmin(false);
@@ -45,75 +48,121 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      async (_event, currentSession) => {
-        setSession(currentSession);
-        setUser(currentSession?.user ?? null);
-        if (currentSession?.user) {
-          setTimeout(() => loadUserData(currentSession.user), 0);
-        } else {
+    let mounted = true;
+
+    const restoreAuth = async () => {
+      const storedUserRaw = window.localStorage.getItem(USER_STORAGE_KEY);
+      const storedSessionRaw = window.localStorage.getItem(SESSION_STORAGE_KEY);
+
+      if (!storedUserRaw) {
+        if (mounted) {
+          setUser(null);
+          setSession(null);
+          setProfile(null);
+          setIsAdmin(false);
+          setIsLoading(false);
+        }
+        return;
+      }
+
+      try {
+        const parsedUser = JSON.parse(storedUserRaw) as AuthUser;
+        const parsedSession = storedSessionRaw ? JSON.parse(storedSessionRaw) as AuthSession : null;
+
+        if (!parsedUser?.id) throw new Error("Invalid cached user");
+
+        if (!mounted) return;
+
+        setUser(parsedUser);
+        setSession(parsedSession);
+        await loadUserData(parsedUser);
+      } catch (err) {
+        console.error("Failed to restore auth session:", err);
+        window.localStorage.removeItem(USER_STORAGE_KEY);
+        window.localStorage.removeItem(SESSION_STORAGE_KEY);
+        if (mounted) {
+          setUser(null);
+          setSession(null);
           setProfile(null);
           setIsAdmin(false);
         }
-        setIsLoading(false);
+      } finally {
+        if (mounted) setIsLoading(false);
       }
-    );
+    };
 
-    supabase.auth.getSession().then(({ data: { session: s } }) => {
-      setSession(s);
-      setUser(s?.user ?? null);
-      if (s?.user) loadUserData(s.user);
-      setIsLoading(false);
-    });
+    void restoreAuth();
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+    };
   }, [loadUserData]);
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({ email, password });
-    if (error) throw error;
+    const result = await authClient.signIn(email, password);
+    setUser(result.user);
+    setSession(result.session);
+    window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.user));
+    window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(result.session));
+    await loadUserData(result.user);
   };
 
   const signUp = async (email: string, password: string, fullName: string, accessCode?: string) => {
-    const { error } = await supabase.auth.signUp({
+    await authClient.signUp({
       email,
       password,
-      options: {
-        data: {
-          full_name: fullName,
-          ...(accessCode ? { access_code: accessCode } : {}),
-        },
-        emailRedirectTo: window.location.origin,
-      },
+      fullName,
+      accessCode,
+      emailRedirectTo: window.location.origin,
     });
-    if (error) throw error;
   };
 
   const signOut = async () => {
-    const { error } = await supabase.auth.signOut();
-    if (error) throw error;
+    await authClient.signOut();
+    setUser(null);
+    setSession(null);
+    setProfile(null);
+    setIsAdmin(false);
+    window.localStorage.removeItem(USER_STORAGE_KEY);
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
   };
 
   const resetPassword = async (email: string) => {
-    const { error } = await supabase.auth.resetPasswordForEmail(email, {
-      redirectTo: `${window.location.origin}/reset-password`,
-    });
-    if (error) throw error;
+    await authClient.resetPassword(email, `${window.location.origin}/reset-password`);
+  };
+
+  const updatePasswordWithRecoveryToken = async (accessToken: string, password: string) => {
+    await authClient.updatePasswordWithRecoveryToken(accessToken, password);
   };
 
   const updateEmail = async (email: string) => {
-    const { error } = await supabase.auth.updateUser({ email });
-    if (error) throw error;
+    if (!user) throw new Error("Not signed in");
+    const updatedUser = await authClient.updateEmail(user.id, email);
+    setUser(updatedUser);
+    window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(updatedUser));
   };
 
   const updatePassword = async (password: string) => {
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) throw error;
+    if (!user) throw new Error("Not signed in");
+    await authClient.updatePassword(user.id, password);
   };
 
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, isAdmin, isLoading, signIn, signUp, signOut, resetPassword, updateEmail, updatePassword }}
+      value={{
+        user,
+        session,
+        profile,
+        isAdmin,
+        isLoading,
+        signIn,
+        signUp,
+        signOut,
+        resetPassword,
+        updatePasswordWithRecoveryToken,
+        updateEmail,
+        updatePassword,
+      }}
     >
       {children}
     </AuthContext.Provider>

@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
@@ -69,6 +70,7 @@ const AdminDashboard = () => {
   const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes">("overview");
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
+  const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
 
   useEffect(() => {
     void loadData();
@@ -470,9 +472,15 @@ const AdminDashboard = () => {
                       <div key={i.id} className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-background/50 p-3">
                         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
                           {i.image_url ? (
-                            <div className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 sm:h-16 sm:w-16">
+                            <button
+                              type="button"
+                              className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 touch-manipulation cursor-zoom-in sm:h-16 sm:w-16"
+                              onClick={() => setPreviewImageUrl(i.image_url)}
+                              onTouchEnd={() => setPreviewImageUrl(i.image_url)}
+                              aria-label="View full inspection image"
+                            >
                               <img src={i.image_url} alt="Sample" className="h-full w-full object-cover" />
-                            </div>
+                            </button>
                           ) : (
                             <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary sm:h-16 sm:w-16">
                               <span className="font-display text-lg text-muted-foreground">{i.meat_type[0].toUpperCase()}</span>
@@ -602,6 +610,18 @@ const AdminDashboard = () => {
           )}
         </div>
       </div>
+
+      <Dialog open={Boolean(previewImageUrl)} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
+        <DialogContent className="w-[min(96vw,980px)] max-w-5xl border-none bg-transparent p-0 shadow-none">
+          {previewImageUrl && (
+            <img
+              src={previewImageUrl}
+              alt="Inspection full view"
+              className="max-h-[85vh] w-full rounded-2xl border border-border/70 bg-black/60 object-contain"
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

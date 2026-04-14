@@ -1,6 +1,8 @@
+import { useState } from "react";
 import type { Inspection } from "@/types/inspection";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { MapPin, Hash } from "lucide-react";
@@ -12,6 +14,8 @@ interface InspectionListItemProps {
 }
 
 export function InspectionListItem({ inspection, onClick, className }: InspectionListItemProps) {
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+
   const surfaceByClass = {
     fresh: "bg-[hsl(var(--fresh)/0.14)]",
     acceptable: "bg-[hsl(var(--acceptable)/0.14)]",
@@ -29,9 +33,21 @@ export function InspectionListItem({ inspection, onClick, className }: Inspectio
     >
       <CardContent className="flex items-center gap-3 p-3">
         {inspection.image_url ? (
-          <div className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-border/70">
+          <button
+            type="button"
+            className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 touch-manipulation cursor-zoom-in"
+            onClick={(event) => {
+              event.stopPropagation();
+              setIsPreviewOpen(true);
+            }}
+            onTouchEnd={(event) => {
+              event.stopPropagation();
+              setIsPreviewOpen(true);
+            }}
+            aria-label="View full inspection image"
+          >
             <img src={inspection.image_url} alt="Sample" className="h-full w-full object-cover" />
-          </div>
+          </button>
         ) : (
           <div className={cn("flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border border-border/70", surfaceByClass)}>
             <span className="font-display text-lg text-muted-foreground">{inspection.meat_type[0].toUpperCase()}</span>
@@ -66,6 +82,18 @@ export function InspectionListItem({ inspection, onClick, className }: Inspectio
           </p>
         </div>
       </CardContent>
+
+      {inspection.image_url && (
+        <Dialog open={isPreviewOpen} onOpenChange={setIsPreviewOpen}>
+          <DialogContent className="w-[min(96vw,980px)] max-w-5xl border-none bg-transparent p-0 shadow-none">
+            <img
+              src={inspection.image_url}
+              alt="Inspection full view"
+              className="max-h-[85vh] w-full rounded-2xl border border-border/70 bg-black/60 object-contain"
+            />
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
   );
 }

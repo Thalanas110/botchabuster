@@ -34,7 +34,7 @@ export function HeroSection() {
           </h1>
 
           <p className="mt-6 text-lg text-muted-foreground max-w-lg leading-relaxed">
-            MeatGuard helps inspectors and consumers objectively evaluate meat
+            MeatLens helps inspectors and consumers objectively evaluate meat
             freshness using Lab* color analysis and GLCM texture features —
             benchmarked against DOH standards.
           </p>
@@ -66,7 +66,7 @@ export function HeroSection() {
               <div className="flex items-center justify-between px-5 pt-3 pb-2 border-b border-border">
                 <div className="flex items-center gap-2">
                   <ShieldCheck className="h-4 w-4 text-primary" />
-                  <span className="font-display text-[10px] font-bold uppercase tracking-wider">MeatGuard</span>
+                  <span className="font-display text-[10px] font-bold uppercase tracking-wider">MeatLens</span>
                 </div>
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary/20 text-[8px] font-bold text-primary">
                   JD
@@ -76,7 +76,7 @@ export function HeroSection() {
               {/* Chat header */}
               <div className="px-4 py-2 border-b border-border">
                 <p className="font-display text-[10px] uppercase tracking-widest text-muted-foreground">
-                  MeatGuard AI Assistant
+                  MeatLens AI Assistant
                 </p>
               </div>
 

@@ -34,7 +34,7 @@ const testimonials = [
   {
     name: "Maria Santos",
     role: "Barangay Health Inspector",
-    quote: "MeatGuard has transformed how we conduct market inspections. The objective data gives us confidence in our assessments.",
+    quote: "MeatLens has transformed how we conduct market inspections. The objective data gives us confidence in our assessments.",
     rating: 5,
   },
   {
@@ -60,7 +60,7 @@ const LandingPage = () => {
       <header className="flex items-center justify-between px-6 py-4 border-b border-border">
         <div className="flex items-center gap-2">
           <ShieldCheck className="h-6 w-6 text-primary" />
-          <span className="font-display text-lg font-bold uppercase tracking-wider">MeatGuard</span>
+          <span className="font-display text-lg font-bold uppercase tracking-wider">MeatLens</span>
         </div>
         <div className="flex items-center gap-3">
           {user ? (
@@ -188,7 +188,7 @@ const LandingPage = () => {
       {/* Footer */}
       <footer className="px-6 py-8 border-t border-border text-center">
         <p className="text-xs text-muted-foreground">
-          MeatGuard — Built for wet market food safety inspection
+          MeatLens — Built for wet market food safety inspection
         </p>
       </footer>
     </div>

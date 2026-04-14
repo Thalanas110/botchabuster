@@ -10,7 +10,7 @@ const CHAT_URL = `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/chat`;
 export function AIChatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: "Hi! I'm MeatGuard AI. Ask me about meat freshness, DOH standards, or how to use the app." },
+    { role: "assistant", content: "Hi! I'm MeatLens AI. Ask me about meat freshness, DOH standards, or how to use the app." },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
@@ -113,7 +113,7 @@ export function AIChatbot() {
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <div className="flex items-center gap-2">
           <Bot className="h-5 w-5 text-primary" />
-          <span className="font-display text-sm font-semibold uppercase tracking-wider">MeatGuard AI</span>
+          <span className="font-display text-sm font-semibold uppercase tracking-wider">MeatLens AI</span>
         </div>
         <button onClick={() => setOpen(false)} className="text-muted-foreground hover:text-foreground">
           <X className="h-5 w-5" />

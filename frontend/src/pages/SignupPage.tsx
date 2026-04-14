@@ -51,7 +51,7 @@ const SignupPage = () => {
             <ShieldCheck className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="font-display text-xl uppercase tracking-wider">Create Account</CardTitle>
-          <CardDescription>Join MeatGuard as a verified inspector</CardDescription>
+          <CardDescription>Join MeatLens as a verified inspector</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

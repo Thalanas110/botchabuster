@@ -31,7 +31,7 @@ app.use("/api/upload", uploadRoutes);
 
 // Start server
 app.listen(config.port, () => {
-  console.log(`MeatGuard backend running on port ${config.port}`);
+  console.log(`MeatLens backend running on port ${config.port}`);
   console.log(`Health check: http://localhost:${config.port}/api/analysis/health`);
 });
 

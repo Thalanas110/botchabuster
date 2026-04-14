@@ -41,8 +41,8 @@ export default defineConfig(({ mode }) => ({
         ],
       },
       manifest: {
-        name: "MeatGuard - Freshness Inspector",
-        short_name: "MeatGuard",
+        name: "MeatLens - Freshness Inspector",
+        short_name: "MeatLens",
         description: "AI-powered meat freshness inspection for wet markets",
         theme_color: "#1a1e2e",
         background_color: "#161a26",

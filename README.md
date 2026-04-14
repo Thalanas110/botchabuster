@@ -1,4 +1,4 @@
-# MeatGuard - Freshness Inspector
+# MeatLens - Freshness Inspector
 
 AI-powered meat freshness inspection for wet markets using computer vision and machine learning.
 

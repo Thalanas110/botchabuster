@@ -1,4 +1,4 @@
-# MeatGuard Backend
+# MeatLens Backend
 
 Node.js/Express backend for meat freshness analysis using OpenCV.
 

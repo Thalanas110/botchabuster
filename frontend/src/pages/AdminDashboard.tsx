@@ -202,7 +202,7 @@ const AdminDashboard = () => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `meatguard-export-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = `MeatLens-export-${format(new Date(), "yyyy-MM-dd")}.csv`;
     a.click();
     URL.revokeObjectURL(url);
     toast.success("CSV exported");

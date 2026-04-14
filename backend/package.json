@@ -1,7 +1,7 @@
 {
-  "name": "meatguard-backend",
+  "name": "MeatLens-backend",
   "version": "1.0.0",
-  "description": "MeatGuard backend - OpenCV meat freshness analysis",
+  "description": "MeatLens backend - OpenCV meat freshness analysis",
   "main": "dist/server.js",
   "scripts": {
     "dev": "ts-node-dev --respawn src/server.ts",

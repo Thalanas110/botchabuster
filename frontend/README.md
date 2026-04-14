@@ -1,4 +1,4 @@
-# MeatGuard - Freshness Inspector Frontend
+# MeatLens - Freshness Inspector Frontend
 
 AI-powered meat freshness inspection for wet markets.
 

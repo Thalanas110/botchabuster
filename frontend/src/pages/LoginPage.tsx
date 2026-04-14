@@ -36,7 +36,7 @@ const LoginPage = () => {
             <ShieldCheck className="h-6 w-6 text-primary" />
           </div>
           <CardTitle className="font-display text-xl uppercase tracking-wider">Sign In</CardTitle>
-          <CardDescription>Access your MeatGuard account</CardDescription>
+          <CardDescription>Access your MeatLens account</CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">

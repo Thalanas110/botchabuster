@@ -67,4 +67,95 @@ export class ProfileController {
       res.status(500).json({ error: error instanceof Error ? error.message : "Failed to check user role" });
     }
   }
+
+  async createUserByAdmin(req: Request, res: Response): Promise<void> {
+    try {
+      const { email, password, full_name, inspector_code, location, avatar_url } = req.body as {
+        email?: string;
+        password?: string;
+        full_name?: string | null;
+        inspector_code?: string | null;
+        location?: string | null;
+        avatar_url?: string | null;
+      };
+
+      if (!email || !password) {
+        res.status(400).json({ error: "Email and password are required" });
+        return;
+      }
+
+      if (password.length < 6) {
+        res.status(400).json({ error: "Password must be at least 6 characters" });
+        return;
+      }
+
+      const createdUser = await profileService.createUserByAdmin({
+        email,
+        password,
+        full_name,
+        inspector_code,
+        location,
+        avatar_url,
+      });
+
+      res.status(201).json(createdUser);
+    } catch (error) {
+      console.error("Create user by admin error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to create user" });
+    }
+  }
+
+  async updateUserByAdmin(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: "User ID is required" });
+        return;
+      }
+
+      const { email, password, full_name, inspector_code, location, avatar_url } = req.body as {
+        email?: string;
+        password?: string;
+        full_name?: string | null;
+        inspector_code?: string | null;
+        location?: string | null;
+        avatar_url?: string | null;
+      };
+
+      if (password !== undefined && password.length < 6) {
+        res.status(400).json({ error: "Password must be at least 6 characters" });
+        return;
+      }
+
+      const updatedUser = await profileService.updateUserByAdmin(id, {
+        email,
+        password,
+        full_name,
+        inspector_code,
+        location,
+        avatar_url,
+      });
+
+      res.json(updatedUser);
+    } catch (error) {
+      console.error("Update user by admin error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to update user" });
+    }
+  }
+
+  async deleteUserByAdmin(req: Request, res: Response): Promise<void> {
+    try {
+      const { id } = req.params;
+      if (!id) {
+        res.status(400).json({ error: "User ID is required" });
+        return;
+      }
+
+      await profileService.deleteUserByAdmin(id);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Delete user by admin error:", error);
+      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to delete user" });
+    }
+  }
 }

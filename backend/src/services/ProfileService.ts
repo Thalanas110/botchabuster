@@ -10,10 +10,32 @@ export interface Profile {
   updated_at: string;
 }
 
+export interface AdminProfile extends Profile {
+  email: string | null;
+}
+
 export interface UserRole {
   id: string;
   user_id: string;
   role: "admin" | "moderator" | "user";
+}
+
+export interface AdminCreateUserInput {
+  email: string;
+  password: string;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  inspector_code?: string | null;
+  location?: string | null;
+}
+
+export interface AdminUpdateUserInput {
+  email?: string;
+  password?: string;
+  full_name?: string | null;
+  avatar_url?: string | null;
+  inspector_code?: string | null;
+  location?: string | null;
 }
 
 export class ProfileService {
@@ -49,13 +71,173 @@ export class ProfileService {
     return data as unknown as Profile;
   }
 
-  async getAllProfiles(): Promise<Profile[]> {
+  private async listAllAuthUsers(): Promise<Array<{ id: string; email: string | null }>> {
+    const users: Array<{ id: string; email: string | null }> = [];
+    const perPage = 200;
+    let page = 1;
+
+    while (true) {
+      const { data, error } = await supabase.auth.admin.listUsers({ page, perPage });
+      if (error) throw new Error(`Failed to fetch auth users: ${error.message}`);
+
+      const batch = data?.users ?? [];
+      users.push(...batch.map((user) => ({ id: user.id, email: user.email ?? null })));
+
+      if (batch.length < perPage) break;
+      page += 1;
+    }
+
+    return users;
+  }
+
+  async getAllProfiles(): Promise<AdminProfile[]> {
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
       .order("created_at", { ascending: false });
     if (error) throw new Error(`Failed to fetch profiles: ${error.message}`);
-    return (data as unknown as Profile[]) ?? [];
+
+    const profiles = (data as unknown as Profile[]) ?? [];
+    const authUsers = await this.listAllAuthUsers();
+    const emailByUserId = new Map(authUsers.map((authUser) => [authUser.id, authUser.email]));
+
+    return profiles.map((profile) => ({
+      ...profile,
+      email: emailByUserId.get(profile.id) ?? null,
+    }));
+  }
+
+  async createUserByAdmin(input: AdminCreateUserInput): Promise<AdminProfile> {
+    const fullName = input.full_name?.trim() || null;
+    const inspectorCode = input.inspector_code?.trim() || null;
+    const location = input.location?.trim() || null;
+    const avatarUrl = input.avatar_url?.trim() || null;
+
+    const { data: createdAuthUser, error: createAuthError } = await supabase.auth.admin.createUser({
+      email: input.email.trim(),
+      password: input.password,
+      email_confirm: true,
+      user_metadata: {
+        ...(fullName ? { full_name: fullName } : {}),
+        ...(inspectorCode ? { access_code: inspectorCode } : {}),
+      },
+    });
+
+    if (createAuthError) throw new Error(`Failed to create user: ${createAuthError.message}`);
+
+    const createdUserId = createdAuthUser.user?.id;
+    if (!createdUserId) throw new Error("Failed to create user: missing user ID");
+
+    const { data: profileData, error: profileError } = await (supabase
+      .from("profiles") as any)
+      .upsert({
+        id: createdUserId,
+        full_name: fullName,
+        inspector_code: inspectorCode,
+        location,
+        avatar_url: avatarUrl,
+        updated_at: new Date().toISOString(),
+      }, { onConflict: "id" })
+      .select()
+      .single();
+
+    if (profileError) {
+      await supabase.auth.admin.deleteUser(createdUserId);
+      throw new Error(`Failed to update created profile: ${profileError.message}`);
+    }
+
+    return {
+      ...(profileData as Profile),
+      email: createdAuthUser.user?.email ?? input.email.trim(),
+    };
+  }
+
+  async updateUserByAdmin(userId: string, input: AdminUpdateUserInput): Promise<AdminProfile> {
+    const shouldUpdateMetadata = input.full_name !== undefined || input.inspector_code !== undefined;
+    const authUserPatch: {
+      email?: string;
+      password?: string;
+      user_metadata?: Record<string, unknown>;
+    } = {};
+
+    let updatedEmail: string | null = null;
+
+    if (input.email !== undefined) {
+      authUserPatch.email = input.email.trim();
+      updatedEmail = input.email.trim();
+    }
+
+    if (input.password !== undefined) {
+      authUserPatch.password = input.password;
+    }
+
+    if (shouldUpdateMetadata) {
+      const { data: existingAuthUser, error: existingAuthUserError } = await supabase.auth.admin.getUserById(userId);
+      if (existingAuthUserError) throw new Error(`Failed to fetch auth user: ${existingAuthUserError.message}`);
+
+      const currentMetadata = { ...(existingAuthUser.user?.user_metadata ?? {}) } as Record<string, unknown>;
+
+      if (input.full_name !== undefined) {
+        const fullName = input.full_name?.trim() || null;
+        if (fullName) currentMetadata.full_name = fullName;
+        else delete currentMetadata.full_name;
+      }
+
+      if (input.inspector_code !== undefined) {
+        const inspectorCode = input.inspector_code?.trim() || null;
+        if (inspectorCode) currentMetadata.access_code = inspectorCode;
+        else delete currentMetadata.access_code;
+      }
+
+      authUserPatch.user_metadata = currentMetadata;
+    }
+
+    if (Object.keys(authUserPatch).length > 0) {
+      const { data: updatedAuthUser, error: updateAuthError } = await supabase.auth.admin.updateUserById(userId, authUserPatch);
+      if (updateAuthError) throw new Error(`Failed to update auth user: ${updateAuthError.message}`);
+      updatedEmail = updatedAuthUser.user?.email ?? updatedEmail;
+    }
+
+    const profilePatch: Partial<Pick<Profile, "full_name" | "avatar_url" | "inspector_code" | "location">> = {};
+
+    if (input.full_name !== undefined) profilePatch.full_name = input.full_name?.trim() || null;
+    if (input.avatar_url !== undefined) profilePatch.avatar_url = input.avatar_url?.trim() || null;
+    if (input.inspector_code !== undefined) profilePatch.inspector_code = input.inspector_code?.trim() || null;
+    if (input.location !== undefined) profilePatch.location = input.location?.trim() || null;
+
+    let updatedProfile: Profile | null = null;
+
+    if (Object.keys(profilePatch).length > 0) {
+      const { data: profileData, error: profileError } = await (supabase
+        .from("profiles") as any)
+        .update({ ...profilePatch, updated_at: new Date().toISOString() })
+        .eq("id", userId)
+        .select()
+        .single();
+
+      if (profileError) throw new Error(`Failed to update profile: ${profileError.message}`);
+      updatedProfile = profileData as Profile;
+    } else {
+      updatedProfile = await this.getProfile(userId);
+    }
+
+    if (!updatedProfile) throw new Error("Failed to fetch updated profile");
+
+    if (updatedEmail === null) {
+      const { data: refreshedAuthUser, error: refreshedAuthUserError } = await supabase.auth.admin.getUserById(userId);
+      if (refreshedAuthUserError) throw new Error(`Failed to fetch updated auth user: ${refreshedAuthUserError.message}`);
+      updatedEmail = refreshedAuthUser.user?.email ?? null;
+    }
+
+    return {
+      ...updatedProfile,
+      email: updatedEmail,
+    };
+  }
+
+  async deleteUserByAdmin(userId: string): Promise<void> {
+    const { error } = await supabase.auth.admin.deleteUser(userId);
+    if (error) throw new Error(`Failed to delete user: ${error.message}`);
   }
 
   async getUserRoles(userId: string): Promise<UserRole[]> {

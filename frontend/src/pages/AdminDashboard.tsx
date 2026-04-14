@@ -28,6 +28,8 @@ import {
   RefreshCcw,
   ShieldCheck,
   ChevronDown,
+  UserPlus,
+  Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfDay, isAfter } from "date-fns";
@@ -37,6 +39,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, AreaCh
 type RoleStat = {
   role: string;
   count: number;
+};
+
+type ManagedUserForm = {
+  full_name: string;
+  email: string;
+  password: string;
+  inspector_code: string;
+  location: string;
 };
 
 const classColors: Record<FreshnessClassification, string> = {
@@ -71,10 +81,41 @@ const AdminDashboard = () => {
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [editingUserId, setEditingUserId] = useState<string | null>(null);
+  const [isSavingUser, setIsSavingUser] = useState(false);
+  const [userForm, setUserForm] = useState<ManagedUserForm>({
+    full_name: "",
+    email: "",
+    password: "",
+    inspector_code: "",
+    location: "",
+  });
 
   useEffect(() => {
     void loadData();
   }, []);
+
+  const resetUserForm = () => {
+    setUserForm({
+      full_name: "",
+      email: "",
+      password: "",
+      inspector_code: "",
+      location: "",
+    });
+    setEditingUserId(null);
+  };
+
+  const handleStartEditUser = (profile: Profile) => {
+    setEditingUserId(profile.id);
+    setUserForm({
+      full_name: profile.full_name || "",
+      email: profile.email || "",
+      password: "",
+      inspector_code: profile.inspector_code || "",
+      location: profile.location || "",
+    });
+  };
 
   const loadData = async () => {
     setLoading(true);
@@ -94,6 +135,83 @@ const AdminDashboard = () => {
       toast.error("Failed to load admin data");
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSubmitUserForm = async () => {
+    const email = userForm.email.trim();
+    const password = userForm.password.trim();
+
+    if (!email) {
+      toast.error("Email is required");
+      return;
+    }
+
+    if (!editingUserId && password.length < 6) {
+      toast.error("Password must be at least 6 characters");
+      return;
+    }
+
+    if (editingUserId && password.length > 0 && password.length < 6) {
+      toast.error("New password must be at least 6 characters");
+      return;
+    }
+
+    setIsSavingUser(true);
+
+    try {
+      if (editingUserId) {
+        const updated = await profileClient.updateUserByAdmin(editingUserId, {
+          email,
+          full_name: userForm.full_name.trim() || null,
+          inspector_code: userForm.inspector_code.trim() || null,
+          location: userForm.location.trim() || null,
+          ...(password ? { password } : {}),
+        });
+
+        setProfiles((prev) => prev.map((p) => (p.id === editingUserId ? updated : p)));
+        toast.success("User updated");
+      } else {
+        const created = await profileClient.createUserByAdmin({
+          email,
+          password,
+          full_name: userForm.full_name.trim() || null,
+          inspector_code: userForm.inspector_code.trim() || null,
+          location: userForm.location.trim() || null,
+        });
+
+        setProfiles((prev) => [created, ...prev]);
+        setStats((prev) => prev ? { ...prev, total_users: prev.total_users + 1 } : prev);
+        toast.success("User created");
+      }
+
+      resetUserForm();
+    } catch (err) {
+      console.error("Failed to save user:", err);
+      toast.error("Failed to save user");
+    } finally {
+      setIsSavingUser(false);
+    }
+  };
+
+  const handleDeleteUser = async (profileId: string) => {
+    if (profileId === user?.id) {
+      toast.error("You can't delete your own account");
+      return;
+    }
+
+    const confirmed = window.confirm("Delete this user and all related records? This cannot be undone.");
+    if (!confirmed) return;
+
+    try {
+      await profileClient.deleteUserByAdmin(profileId);
+      setProfiles((prev) => prev.filter((p) => p.id !== profileId));
+      setStats((prev) => prev ? { ...prev, total_users: Math.max(0, prev.total_users - 1) } : prev);
+      if (editingUserId === profileId) resetUserForm();
+      toast.success("User deleted");
+    } catch (err) {
+      console.error("Failed to delete user:", err);
+      toast.error("Failed to delete user");
     }
   };
 
@@ -420,39 +538,150 @@ const AdminDashboard = () => {
           )}
 
           {activeTab === "users" && (
-            <Card className="rounded-3xl border-border/70 bg-card/95">
-              <CardHeader>
-                <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
-                  <Users className="h-4 w-4" />
-                  Registered Users
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                {profiles.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No users found</p>
-                ) : (
-                  <div className="grid gap-3 md:grid-cols-2">
-                    {profiles.map((p) => (
-                      <div key={p.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
-                        <div className="flex items-start justify-between gap-2">
-                          <div>
-                            <p className="font-display text-base font-semibold">{p.full_name || "Unnamed"}</p>
-                            <p className="text-xs text-muted-foreground">{p.location || "No location"}</p>
-                          </div>
-                          <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                            {p.id === user?.id ? "You" : "User"}
-                          </span>
-                        </div>
-                        <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                          <p>Joined: {format(new Date(p.created_at), "MMM d, yyyy")}</p>
-                          <p className="break-all">Inspector Code: {p.inspector_code || "N/A"}</p>
-                        </div>
-                      </div>
-                    ))}
+            <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+              <Card className="rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
+                    <UserPlus className="h-4 w-4" />
+                    {editingUserId ? "Edit User" : "Add User"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Full Name</Label>
+                    <Input
+                      value={userForm.full_name}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="Juan dela Cruz"
+                      className="h-10 rounded-xl"
+                    />
                   </div>
-                )}
-              </CardContent>
-            </Card>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Email</Label>
+                    <Input
+                      type="email"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder="inspector@example.com"
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                      {editingUserId ? "New Password (Optional)" : "Password"}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={userForm.password}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
+                      placeholder={editingUserId ? "Leave blank to keep current password" : "At least 6 characters"}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Inspector Code</Label>
+                    <Input
+                      value={userForm.inspector_code}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, inspector_code: e.target.value }))}
+                      placeholder="INSPECTOR-2026"
+                      className="h-10 rounded-xl font-display tracking-wider"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Location</Label>
+                    <Input
+                      value={userForm.location}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, location: e.target.value }))}
+                      placeholder="Quezon City"
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      onClick={() => void handleSubmitUserForm()}
+                      className="h-10 rounded-xl gap-1"
+                      disabled={isSavingUser}
+                    >
+                      {isSavingUser ? <Loader2 className="h-4 w-4 animate-spin" /> : editingUserId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                      {editingUserId ? "Save Changes" : "Create User"}
+                    </Button>
+                    {editingUserId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={resetUserForm}
+                        className="h-10 rounded-xl"
+                        disabled={isSavingUser}
+                      >
+                        Cancel Edit
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
+                    <Users className="h-4 w-4" />
+                    Registered Users
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {profiles.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No users found</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {profiles.map((p) => (
+                        <div key={p.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-display text-base font-semibold">{p.full_name || "Unnamed"}</p>
+                              <p className="truncate text-xs text-muted-foreground">{p.email || "No email"}</p>
+                            </div>
+                            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                              {p.id === user?.id ? "You" : "User"}
+                            </span>
+                          </div>
+                          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                            <p>Joined: {format(new Date(p.created_at), "MMM d, yyyy")}</p>
+                            <p>Location: {p.location || "No location"}</p>
+                            <p className="break-all">Inspector Code: {p.inspector_code || "N/A"}</p>
+                          </div>
+                          <div className="mt-3 flex items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-lg gap-1"
+                              onClick={() => handleStartEditUser(p)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-lg gap-1 text-destructive hover:text-destructive"
+                              onClick={() => void handleDeleteUser(p.id)}
+                              disabled={p.id === user?.id}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
           )}
 
           {activeTab === "inspections" && (

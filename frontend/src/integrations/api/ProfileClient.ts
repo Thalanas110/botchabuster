@@ -5,9 +5,28 @@ export interface Profile {
   full_name: string | null;
   avatar_url: string | null;
   inspector_code: string | null;
+  email?: string | null;
   location: string | null;
   created_at: string;
   updated_at: string;
+}
+
+export interface AdminCreateUserPayload {
+  email: string;
+  password: string;
+  full_name?: string | null;
+  inspector_code?: string | null;
+  location?: string | null;
+  avatar_url?: string | null;
+}
+
+export interface AdminUpdateUserPayload {
+  email?: string;
+  password?: string;
+  full_name?: string | null;
+  inspector_code?: string | null;
+  location?: string | null;
+  avatar_url?: string | null;
 }
 
 export class ProfileClient {
@@ -45,6 +64,33 @@ export class ProfileClient {
     const res = await fetch(`${API_BASE_URL}/profiles`);
     if (!res.ok) throw new Error(`Failed to fetch profiles: ${res.statusText}`);
     return res.json();
+  }
+
+  async createUserByAdmin(payload: AdminCreateUserPayload): Promise<Profile> {
+    const res = await fetch(`${API_BASE_URL}/profiles/admin/users`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Failed to create user: ${res.statusText}`);
+    return res.json();
+  }
+
+  async updateUserByAdmin(userId: string, payload: AdminUpdateUserPayload): Promise<Profile> {
+    const res = await fetch(`${API_BASE_URL}/profiles/admin/users/${userId}`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+    });
+    if (!res.ok) throw new Error(`Failed to update user: ${res.statusText}`);
+    return res.json();
+  }
+
+  async deleteUserByAdmin(userId: string): Promise<void> {
+    const res = await fetch(`${API_BASE_URL}/profiles/admin/users/${userId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) throw new Error(`Failed to delete user: ${res.statusText}`);
   }
 
   async getUserStats(): Promise<{

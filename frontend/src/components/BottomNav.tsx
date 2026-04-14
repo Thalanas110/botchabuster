@@ -1,12 +1,11 @@
 import { NavLink as RouterNavLink } from "react-router-dom";
-import { Camera, ClipboardList, BarChart3, Shield, UserRound } from "lucide-react";
+import { Camera, ClipboardList, Shield, UserRound } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useAuth } from "@/contexts/AuthContext";
 
 const navItems = [
   { to: "/inspect", icon: Camera, label: "Inspect" },
   { to: "/history", icon: ClipboardList, label: "History" },
-  { to: "/dashboard", icon: BarChart3, label: "Stats" },
 ];
 
 export function BottomNav() {

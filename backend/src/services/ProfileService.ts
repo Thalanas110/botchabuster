@@ -4,6 +4,7 @@ export interface Profile {
   id: string;
   full_name: string | null;
   avatar_url: string | null;
+  inspector_code: string | null;
   location: string | null;
   created_at: string;
   updated_at: string;

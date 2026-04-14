@@ -33,7 +33,7 @@ const SignupPage = () => {
         setLoading(false);
         return;
       }
-      await signUp(email, password, fullName);
+      await signUp(email, password, fullName, accessCode.trim());
       toast.success("Account created! Check your email to verify.");
       navigate("/login");
     } catch (err: any) {

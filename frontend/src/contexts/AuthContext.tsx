@@ -10,9 +10,10 @@ interface AuthContextType {
   isAdmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<void>;
-  signUp: (email: string, password: string, fullName: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, accessCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
+  updateEmail: (email: string) => Promise<void>;
   updatePassword: (password: string) => Promise<void>;
 }
 
@@ -73,12 +74,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
-  const signUp = async (email: string, password: string, fullName: string) => {
+  const signUp = async (email: string, password: string, fullName: string, accessCode?: string) => {
     const { error } = await supabase.auth.signUp({
       email,
       password,
       options: {
-        data: { full_name: fullName },
+        data: {
+          full_name: fullName,
+          ...(accessCode ? { access_code: accessCode } : {}),
+        },
         emailRedirectTo: window.location.origin,
       },
     });
@@ -97,6 +101,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     if (error) throw error;
   };
 
+  const updateEmail = async (email: string) => {
+    const { error } = await supabase.auth.updateUser({ email });
+    if (error) throw error;
+  };
+
   const updatePassword = async (password: string) => {
     const { error } = await supabase.auth.updateUser({ password });
     if (error) throw error;
@@ -104,7 +113,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, session, profile, isAdmin, isLoading, signIn, signUp, signOut, resetPassword, updatePassword }}
+      value={{ user, session, profile, isAdmin, isLoading, signIn, signUp, signOut, resetPassword, updateEmail, updatePassword }}
     >
       {children}
     </AuthContext.Provider>

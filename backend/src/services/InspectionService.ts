@@ -1,6 +1,8 @@
 import { supabase } from "../integrations/supabase";
 import type { Inspection, InspectionInsert } from "../types/inspection";
 
+export type InspectionScope = "mine" | "all";
+
 type CreateInspectionResult = {
   inspection: Inspection;
   created: boolean;
@@ -24,10 +26,20 @@ export class InspectionService {
     return InspectionService.instance;
   }
 
-  async getAll(limit = 50, offset = 0): Promise<Inspection[]> {
-    const { data, error } = await supabase
+  private shouldViewAll(scope: InspectionScope, isAdmin: boolean): boolean {
+    return scope === "all" && isAdmin;
+  }
+
+  async getAll(limit = 50, offset = 0, userId: string, scope: InspectionScope = "mine", isAdmin = false): Promise<Inspection[]> {
+    let query = supabase
       .from(this.tableName)
-      .select("*")
+      .select("*");
+
+    if (!this.shouldViewAll(scope, isAdmin)) {
+      query = query.eq("user_id", userId);
+    }
+
+    const { data, error } = await query
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -35,37 +47,48 @@ export class InspectionService {
     return (data as unknown as Inspection[]) ?? [];
   }
 
-  async getById(id: string): Promise<Inspection | null> {
-    const { data, error } = await supabase
+  async getById(id: string, userId: string, scope: InspectionScope = "mine", isAdmin = false): Promise<Inspection | null> {
+    let query = supabase
       .from(this.tableName)
       .select("*")
-      .eq("id", id)
-      .maybeSingle();
+      .eq("id", id);
+
+    if (!this.shouldViewAll(scope, isAdmin)) {
+      query = query.eq("user_id", userId);
+    }
+
+    const { data, error } = await query.maybeSingle();
 
     if (error) throw new Error(`Failed to fetch inspection: ${error.message}`);
     return data as unknown as Inspection | null;
   }
 
-  async create(inspection: InspectionInsert): Promise<CreateInspectionResult> {
+  async create(inspection: InspectionInsert, userId: string): Promise<CreateInspectionResult> {
     const clientSubmissionId = inspection.client_submission_id?.trim();
     if (!clientSubmissionId) {
       throw new Error("client_submission_id is required");
     }
 
-    const existingInspection = await this.getByClientSubmissionId(clientSubmissionId);
+    const existingInspection = await this.getByClientSubmissionId(clientSubmissionId, userId);
     if (existingInspection) {
       return { inspection: existingInspection, created: false };
     }
 
+    const inspectionPayload: InspectionInsert = {
+      ...inspection,
+      user_id: userId,
+      client_submission_id: clientSubmissionId,
+    };
+
     const { data, error } = await (supabase
       .from(this.tableName) as any)
-      .insert(inspection)
+      .insert(inspectionPayload)
       .select()
       .single();
 
     if (error) {
       if (this.isDuplicateClientSubmissionError(error)) {
-        const duplicateInspection = await this.getByClientSubmissionId(clientSubmissionId);
+        const duplicateInspection = await this.getByClientSubmissionId(clientSubmissionId, userId);
         if (duplicateInspection) {
           return { inspection: duplicateInspection, created: false };
         }
@@ -77,22 +100,34 @@ export class InspectionService {
     return { inspection: data as unknown as Inspection, created: true };
   }
 
-  async delete(id: string): Promise<void> {
-    const { error } = await supabase
+  async delete(id: string, userId: string, isAdmin = false): Promise<void> {
+    let query = supabase
       .from(this.tableName)
       .delete()
       .eq("id", id);
 
+    if (!isAdmin) {
+      query = query.eq("user_id", userId);
+    }
+
+    const { error } = await query;
+
     if (error) throw new Error(`Failed to delete inspection: ${error.message}`);
   }
 
-  async getStatistics(): Promise<{
+  async getStatistics(userId: string, scope?: InspectionScope, isAdmin?: boolean): Promise<{
     total: number;
     byClassification: Record<string, number>;
   }> {
-    const { data, error } = await supabase
+    let query = supabase
       .from(this.tableName)
       .select("classification");
+
+    if (!this.shouldViewAll(scope ?? "mine", isAdmin ?? false)) {
+      query = query.eq("user_id", userId);
+    }
+
+    const { data, error } = await query;
 
     if (error) throw new Error(`Failed to fetch statistics: ${error.message}`);
 
@@ -105,11 +140,12 @@ export class InspectionService {
     return { total: records.length, byClassification };
   }
 
-  private async getByClientSubmissionId(clientSubmissionId: string): Promise<Inspection | null> {
+  private async getByClientSubmissionId(clientSubmissionId: string, userId: string): Promise<Inspection | null> {
     const { data, error } = await supabase
       .from(this.tableName)
       .select("*")
       .eq("client_submission_id", clientSubmissionId)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) throw new Error(`Failed to fetch inspection by client submission ID: ${error.message}`);

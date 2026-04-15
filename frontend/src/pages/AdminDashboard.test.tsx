@@ -228,6 +228,8 @@ describe("AdminDashboard overview analytics", () => {
 
     await waitForText(container, /admin dashboard/i);
 
+    expect(mockGetAllInspections).toHaveBeenCalledWith(200, 0, "all");
+
     expect(findText(container, /business analytics/i)).toBeTruthy();
     expect(findText(container, /top inspectors by inspection volume/i)).toBeTruthy();
     expect(findText(container, /average confidence by inspector/i)).toBeTruthy();

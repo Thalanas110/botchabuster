@@ -63,6 +63,17 @@ export class AuthService {
     };
   }
 
+  private getSupabaseAuthConfig(): { supabaseUrl: string; supabaseServiceKey: string } {
+    const supabaseUrl = process.env.SUPABASE_URL;
+    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+
+    if (!supabaseUrl || !supabaseServiceKey) {
+      throw new Error("Supabase environment variables are missing");
+    }
+
+    return { supabaseUrl, supabaseServiceKey };
+  }
+
   private async ensureProfileExists(user: {
     id: string;
     user_metadata?: Record<string, unknown> | null;
@@ -180,29 +191,38 @@ export class AuthService {
     if (error) throw new Error(`Failed to update password: ${error.message}`);
   }
 
-  async updatePasswordWithRecoveryToken(accessToken: string, password: string): Promise<void> {
-    const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Supabase environment variables are missing");
+  async getUserByAccessToken(accessToken: string): Promise<AuthUser> {
+    const trimmedToken = accessToken.trim();
+    if (!trimmedToken) {
+      throw new Error("Authentication required");
     }
 
+    const { supabaseUrl, supabaseServiceKey } = this.getSupabaseAuthConfig();
     const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {
-        Authorization: `Bearer ${accessToken}`,
+        Authorization: `Bearer ${trimmedToken}`,
         apikey: supabaseServiceKey,
       },
     });
 
     if (!userResponse.ok) {
-      throw new Error("Invalid or expired recovery token");
+      throw new Error("Invalid or expired access token");
     }
 
-    const userData = await userResponse.json() as { id?: string };
-    if (!userData.id) throw new Error("Invalid recovery user data");
+    const userData = await userResponse.json() as { id?: string; email?: string | null };
+    const user = this.mapUser(userData.id ? { id: userData.id, email: userData.email ?? null } : null);
 
-    const { error } = await supabase.auth.admin.updateUserById(userData.id, { password });
+    if (!user) {
+      throw new Error("Invalid access token user data");
+    }
+
+    return user;
+  }
+
+  async updatePasswordWithRecoveryToken(accessToken: string, password: string): Promise<void> {
+    const user = await this.getUserByAccessToken(accessToken);
+
+    const { error } = await supabase.auth.admin.updateUserById(user.id, { password });
     if (error) throw new Error(`Failed to update password: ${error.message}`);
   }
 }

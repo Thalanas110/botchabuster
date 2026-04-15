@@ -1,77 +1,125 @@
 import { Request, Response } from "express";
+import { authService } from "../services/AuthService";
 import { inspectionService } from "../services/InspectionService";
+import type { InspectionScope } from "../services/InspectionService";
+import { profileService } from "../services/ProfileService";
 import type { InspectionInsert } from "../types/inspection";
 
+class RequestAccessError extends Error {
+  constructor(public readonly status: number, message: string) {
+    super(message);
+  }
+}
+
 export class InspectionController {
+  private getScope(req: Request): InspectionScope {
+    return req.query.scope === "all" ? "all" : "mine";
+  }
+
+  private async getRequestAccessContext(req: Request): Promise<{ userId: string; isAdmin: boolean }> {
+    const authorizationHeader = req.header("authorization");
+    if (!authorizationHeader?.startsWith("Bearer ")) {
+      throw new RequestAccessError(401, "Authentication required");
+    }
+
+    const accessToken = authorizationHeader.slice("Bearer ".length).trim();
+    if (!accessToken) {
+      throw new RequestAccessError(401, "Authentication required");
+    }
+
+    let userId: string;
+
+    try {
+      const user = await authService.getUserByAccessToken(accessToken);
+      userId = user.id;
+    } catch (error) {
+      throw new RequestAccessError(401, error instanceof Error ? error.message : "Authentication required");
+    }
+
+    const isAdmin = await profileService.hasRole(userId, "admin");
+    return { userId, isAdmin };
+  }
+
+  private handleError(action: string, res: Response, error: unknown, fallbackMessage: string): void {
+    console.error(`${action} error:`, error);
+
+    if (error instanceof RequestAccessError) {
+      res.status(error.status).json({ error: error.message });
+      return;
+    }
+
+    res.status(500).json({ error: error instanceof Error ? error.message : fallbackMessage });
+  }
+
   async getStatistics(req: Request, res: Response): Promise<void> {
     try {
-      const stats = await inspectionService.getStatistics();
+      const accessContext = await this.getRequestAccessContext(req);
+      const stats = await inspectionService.getStatistics(accessContext.userId, this.getScope(req), accessContext.isAdmin);
       res.json(stats);
     } catch (error) {
-      console.error("Get inspection statistics error:", error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to fetch inspection statistics" });
+      this.handleError("Get inspection statistics", res, error, "Failed to fetch inspection statistics");
     }
   }
 
   async getAll(req: Request, res: Response): Promise<void> {
     try {
+      const accessContext = await this.getRequestAccessContext(req);
       const limit = parseInt(req.query.limit as string) || 50;
       const offset = parseInt(req.query.offset as string) || 0;
-      const inspections = await inspectionService.getAll(limit, offset);
+      const inspections = await inspectionService.getAll(limit, offset, accessContext.userId, this.getScope(req), accessContext.isAdmin);
       res.json(inspections);
     } catch (error) {
-      console.error("Get inspections error:", error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to fetch inspections" });
+      this.handleError("Get inspections", res, error, "Failed to fetch inspections");
     }
   }
 
   async getById(req: Request, res: Response): Promise<void> {
     try {
+      const accessContext = await this.getRequestAccessContext(req);
       const { id } = req.params;
       if (!id) {
         res.status(400).json({ error: "Inspection ID is required" });
         return;
       }
-      const inspection = await inspectionService.getById(id);
+      const inspection = await inspectionService.getById(id, accessContext.userId, this.getScope(req), accessContext.isAdmin);
       if (!inspection) {
         res.status(404).json({ error: "Inspection not found" });
         return;
       }
       res.json(inspection);
     } catch (error) {
-      console.error("Get inspection error:", error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to fetch inspection" });
+      this.handleError("Get inspection", res, error, "Failed to fetch inspection");
     }
   }
 
   async create(req: Request, res: Response): Promise<void> {
     try {
+      const accessContext = await this.getRequestAccessContext(req);
       const input = req.body as Partial<InspectionInsert>;
       if (!input.client_submission_id) {
         res.status(400).json({ error: "client_submission_id is required" });
         return;
       }
 
-      const { inspection, created } = await inspectionService.create(input as InspectionInsert);
+      const { inspection, created } = await inspectionService.create(input as InspectionInsert, accessContext.userId);
       res.status(created ? 201 : 200).json(inspection);
     } catch (error) {
-      console.error("Create inspection error:", error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to create inspection" });
+      this.handleError("Create inspection", res, error, "Failed to create inspection");
     }
   }
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
+      const accessContext = await this.getRequestAccessContext(req);
       const { id } = req.params;
       if (!id) {
         res.status(400).json({ error: "Inspection ID is required" });
         return;
       }
-      await inspectionService.delete(id);
+      await inspectionService.delete(id, accessContext.userId, accessContext.isAdmin);
       res.status(204).send();
     } catch (error) {
-      console.error("Delete inspection error:", error);
-      res.status(500).json({ error: error instanceof Error ? error.message : "Failed to delete inspection" });
+      this.handleError("Delete inspection", res, error, "Failed to delete inspection");
     }
   }
 }

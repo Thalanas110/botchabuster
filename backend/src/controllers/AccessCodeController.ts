@@ -1,7 +1,11 @@
 import { Request, Response } from "express";
 import { accessCodeService } from "../services/AccessCodeService";
 
+// this function is the one that handles all the access code related 
+// endpoints. 
 export class AccessCodeController {
+  // validate first if a code is active. If the said code is active then
+  // the thing must return a correct boolean.
   async validate(req: Request, res: Response): Promise<void> {
     try {
       const { code } = req.body as { code?: string };
@@ -18,6 +22,8 @@ export class AccessCodeController {
     }
   }
 
+  // asynch function that fetches all access codes
+  // this is used in the admin dash only lol
   async getAll(req: Request, res: Response): Promise<void> {
     try {
       const codes = await accessCodeService.getAll();
@@ -28,6 +34,8 @@ export class AccessCodeController {
     }
   }
 
+  // you use this to create new access code.
+  // first validate if code is present, if not, return bad req lol
   async create(req: Request, res: Response): Promise<void> {
     try {
       const { code, description } = req.body;
@@ -43,6 +51,9 @@ export class AccessCodeController {
     }
   }
 
+  // deletion of access codes haha
+  // you first validate if id is here, if not, return bad reqa as uzual
+  // if present then literally just call delete function bruh
   async delete(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -58,6 +69,7 @@ export class AccessCodeController {
     }
   }
 
+  // toggles active state of access code LOL
   async toggleActive(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;

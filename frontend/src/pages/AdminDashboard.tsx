@@ -145,7 +145,7 @@ const AdminDashboard = () => {
     try {
       const [profileData, inspectionData, statsData, codesData] = await Promise.all([
         profileClient.getAllProfiles(),
-        inspectionClient.getAll(200),
+        inspectionClient.getAll(200, 0, "all"),
         profileClient.getUserStats(),
         accessCodeClient.getAll(),
       ]);

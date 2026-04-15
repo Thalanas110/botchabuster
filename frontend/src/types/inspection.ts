@@ -27,6 +27,7 @@ export interface InspectionInsert {
   meat_type: MeatType;
   classification: FreshnessClassification;
   confidence_score: number;
+  client_submission_id: string;
   lab_l?: number | null;
   lab_a?: number | null;
   lab_b?: number | null;

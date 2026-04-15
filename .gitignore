@@ -38,3 +38,11 @@ frontend/.eslintcache
 
 # hidden files
 docs
+
+# idk why, but since this doesn't work properly on my laptop when doing npm install, I want to ignore it
+# i had to use tons of ai help just to run this on laptop, but not on my desktop as it ran perfectly there
+.codex-debug
+.codex-npm-cache
+.codex-node-modules
+
+

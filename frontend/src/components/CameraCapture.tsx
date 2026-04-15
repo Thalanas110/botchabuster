@@ -7,6 +7,7 @@ import { toast } from "sonner";
 interface CameraCaptureProps {
   onCapture: (file: File) => void;
   className?: string;
+  disabled?: boolean;
 }
 
 interface CaptureQualityResult {
@@ -17,7 +18,7 @@ interface CaptureQualityResult {
 const CLIENT_BLUR_THRESHOLD = 110;
 const CLIENT_MAX_CENTER_OFFSET = 0.2;
 
-export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
+export function CameraCapture({ onCapture, className, disabled = false }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -28,6 +29,8 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
   const [isStarting, setIsStarting] = useState(false);
 
   const startCamera = useCallback(async () => {
+    if (disabled) return;
+
     setError(null);
     setIsStarting(true);
     setIsStreaming(true);
@@ -70,7 +73,7 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
     } finally {
       setIsStarting(false);
     }
-  }, []);
+  }, [disabled]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -99,6 +102,8 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
   }, [stream]);
 
   const capturePhoto = useCallback(() => {
+    if (disabled) return;
+
     if (!videoRef.current || !canvasRef.current) {
       toast.error("Camera not ready");
       return;
@@ -128,9 +133,11 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
     setStream(null);
     setIsStreaming(false);
     setIsVideoReady(false);
-  }, [stream]);
+  }, [disabled, stream]);
 
   const confirmCapture = useCallback(() => {
+    if (disabled) return;
+
     if (!canvasRef.current) return;
 
     const quality = assessCanvasQuality(canvasRef.current);
@@ -149,15 +156,19 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
       "image/jpeg",
       0.9
     );
-  }, [onCapture]);
+  }, [disabled, onCapture]);
 
   const retake = useCallback(() => {
+    if (disabled) return;
+
     setCapturedImage(null);
     void startCamera();
-  }, [startCamera]);
+  }, [disabled, startCamera]);
 
   const handleFileInput = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (disabled) return;
+
       const file = e.target.files?.[0];
       if (file) {
         const quality = await assessFileQuality(file);
@@ -173,7 +184,7 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
         reader.readAsDataURL(file);
       }
     },
-    [onCapture]
+    [disabled, onCapture]
   );
 
   return (
@@ -217,27 +228,33 @@ export function CameraCapture({ onCapture, className }: CameraCaptureProps) {
       <div className="flex w-full gap-3">
         {capturedImage ? (
           <>
-            <Button variant="outline" onClick={retake} className="flex-1 gap-2 rounded-xl">
+            <Button variant="outline" onClick={retake} disabled={disabled} className="flex-1 gap-2 rounded-xl">
               <RotateCcw className="h-4 w-4" /> Retake
             </Button>
-            <Button onClick={confirmCapture} className="flex-1 gap-2 rounded-xl">
+            <Button onClick={confirmCapture} disabled={disabled} className="flex-1 gap-2 rounded-xl">
               <Check className="h-4 w-4" /> Use Photo
             </Button>
           </>
         ) : isStreaming ? (
-          <Button onClick={capturePhoto} size="lg" className="w-full gap-2 rounded-xl" disabled={!isVideoReady}>
+          <Button onClick={capturePhoto} size="lg" className="w-full gap-2 rounded-xl" disabled={disabled || !isVideoReady}>
             <Camera className="h-5 w-5" /> {isVideoReady ? "Capture" : "Starting..."}
           </Button>
         ) : (
           <div className="flex w-full gap-3">
-            <Button onClick={() => void startCamera()} size="lg" className="flex-1 gap-2 rounded-xl" disabled={isStarting}>
+            <Button onClick={() => void startCamera()} size="lg" className="flex-1 gap-2 rounded-xl" disabled={disabled || isStarting}>
               <Camera className="h-5 w-5" /> {isStarting ? "Starting..." : "Open Camera"}
             </Button>
             <label className="flex-1">
-              <Button variant="outline" size="lg" className="w-full cursor-pointer gap-2 rounded-xl" asChild>
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full cursor-pointer gap-2 rounded-xl"
+                disabled={disabled}
+                asChild
+              >
                 <span>Upload File</span>
               </Button>
-              <input type="file" accept="image/*" className="hidden" onChange={handleFileInput} />
+              <input type="file" accept="image/*" className="hidden" disabled={disabled} onChange={handleFileInput} />
             </label>
           </div>
         )}

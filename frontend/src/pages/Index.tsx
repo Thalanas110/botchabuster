@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
 import { CameraCapture } from "@/components/CameraCapture";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { Button } from "@/components/ui/button";
@@ -26,13 +26,21 @@ const InspectPage = () => {
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [clientSubmissionId, setClientSubmissionId] = useState<string | null>(null);
+  const saveLockRef = useRef(false);
   const analyzeImage = useAnalyzeImage();
   const createInspection = useCreateInspection();
 
   const handleCapture = useCallback((file: File) => {
+    if (saveStatus === "saving") return;
+
     setCapturedFile(file);
     setResult(null);
-  }, []);
+    setSaveStatus("idle");
+    saveLockRef.current = false;
+    setClientSubmissionId(createClientSubmissionId());
+  }, [saveStatus]);
 
   const handleAnalyze = useCallback(async () => {
     if (!capturedFile) return;
@@ -59,11 +67,17 @@ const InspectPage = () => {
   }, [capturedFile, selectedMeat, analyzeImage]);
 
   const handleSave = useCallback(async () => {
-    if (!result || !capturedFile) return;
+    if (!result || !capturedFile || saveLockRef.current || saveStatus === "saved") return;
     if (!user) {
       toast.error("Please sign in to save inspections");
       return;
     }
+
+    const submissionId = clientSubmissionId ?? createClientSubmissionId();
+    saveLockRef.current = true;
+    setSaveStatus("saving");
+    setClientSubmissionId(submissionId);
+
     try {
       let imageUrl: string | null = null;
       try {
@@ -75,6 +89,7 @@ const InspectPage = () => {
 
       await createInspection.mutateAsync({
         user_id: user.id,
+        client_submission_id: submissionId,
         meat_type: selectedMeat,
         classification: result.classification,
         confidence_score: result.confidence_score,
@@ -89,16 +104,22 @@ const InspectPage = () => {
         explanation: result.explanation,
         image_url: imageUrl,
       });
+      setSaveStatus("saved");
       toast.success("Inspection saved");
     } catch (error) {
+      saveLockRef.current = false;
+      setSaveStatus("idle");
       console.error("Save error:", error);
       toast.error("Failed to save inspection");
     }
-  }, [result, selectedMeat, createInspection, user, capturedFile]);
+  }, [result, selectedMeat, createInspection, user, capturedFile, clientSubmissionId, saveStatus]);
 
   const handleReset = useCallback(() => {
     setCapturedFile(null);
     setResult(null);
+    setSaveStatus("idle");
+    saveLockRef.current = false;
+    setClientSubmissionId(null);
   }, []);
 
   return (
@@ -162,7 +183,7 @@ const InspectPage = () => {
               ))}
             </div>
 
-            <CameraCapture onCapture={handleCapture} />
+            <CameraCapture onCapture={handleCapture} disabled={saveStatus === "saving" || createInspection.isPending} />
 
             {capturedFile && !result && (
               <div className="mt-4">
@@ -204,12 +225,25 @@ const InspectPage = () => {
         {result && (
           <section className="mt-4 rounded-3xl border border-border/70 bg-card/92 p-4">
             <div className="flex flex-col gap-3 sm:flex-row">
-              <Button variant="outline" onClick={handleReset} className="flex-1 gap-2 rounded-xl">
+              <Button
+                variant="outline"
+                onClick={handleReset}
+                disabled={saveStatus === "saving" || createInspection.isPending}
+                className="flex-1 gap-2 rounded-xl"
+              >
                 <RotateCcw className="h-4 w-4" /> New Scan
               </Button>
-              <Button onClick={handleSave} disabled={createInspection.isPending} className="flex-1 gap-2 rounded-xl">
-                {createInspection.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
-                Save Record
+              <Button
+                onClick={handleSave}
+                disabled={saveStatus !== "idle" || createInspection.isPending}
+                className="flex-1 gap-2 rounded-xl"
+              >
+                {saveStatus === "saving" || createInspection.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4" />
+                )}
+                {saveStatus === "saved" ? "Record Saved" : saveStatus === "saving" ? "Saving..." : "Save Record"}
               </Button>
             </div>
           </section>
@@ -220,3 +254,15 @@ const InspectPage = () => {
 };
 
 export default InspectPage;
+
+function createClientSubmissionId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    return crypto.randomUUID();
+  }
+
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (char) => {
+    const randomNibble = Math.floor(Math.random() * 16);
+    const value = char === "x" ? randomNibble : (randomNibble & 0x3) | 0x8;
+    return value.toString(16);
+  });
+}

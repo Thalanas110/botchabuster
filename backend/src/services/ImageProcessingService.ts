@@ -20,7 +20,7 @@ export class ImageProcessingService {
   private static instance: ImageProcessingService;
 
   // Tuned for downscaled grayscale images in [0,255].
-  private readonly blurThreshold = 140;
+  private readonly blurThreshold = 90;
   private readonly maxCenterOffset = 0.18;
 
   private constructor() {}

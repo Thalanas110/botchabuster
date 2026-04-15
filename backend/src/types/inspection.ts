@@ -11,6 +11,12 @@ export interface Inspection {
   glcm_correlation: number;
   glcm_energy: number;
   glcm_homogeneity: number;
+  flagged_deviations: string[];
+  explanation: string | null;
+  image_url: string | null;
+  location: string | null;
+  inspector_notes: string | null;
+  client_submission_id: string | null;
   created_at: string;
   updated_at: string;
 }
@@ -27,4 +33,10 @@ export interface InspectionInsert {
   glcm_correlation: number;
   glcm_energy: number;
   glcm_homogeneity: number;
+  flagged_deviations?: string[];
+  explanation?: string | null;
+  image_url?: string | null;
+  location?: string | null;
+  inspector_notes?: string | null;
+  client_submission_id: string;
 }

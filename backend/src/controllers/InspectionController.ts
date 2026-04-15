@@ -46,8 +46,14 @@ export class InspectionController {
 
   async create(req: Request, res: Response): Promise<void> {
     try {
-      const inspection = await inspectionService.create(req.body as InspectionInsert);
-      res.status(201).json(inspection);
+      const input = req.body as Partial<InspectionInsert>;
+      if (!input.client_submission_id) {
+        res.status(400).json({ error: "client_submission_id is required" });
+        return;
+      }
+
+      const { inspection, created } = await inspectionService.create(input as InspectionInsert);
+      res.status(created ? 201 : 200).json(inspection);
     } catch (error) {
       console.error("Create inspection error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Failed to create inspection" });

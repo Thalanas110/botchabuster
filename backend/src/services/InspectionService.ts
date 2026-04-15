@@ -1,6 +1,16 @@
 import { supabase } from "../integrations/supabase";
 import type { Inspection, InspectionInsert } from "../types/inspection";
 
+type CreateInspectionResult = {
+  inspection: Inspection;
+  created: boolean;
+};
+
+type SupabaseWriteError = {
+  code?: string | null;
+  message: string;
+};
+
 export class InspectionService {
   private static instance: InspectionService;
   private readonly tableName = "inspections";
@@ -36,15 +46,35 @@ export class InspectionService {
     return data as unknown as Inspection | null;
   }
 
-  async create(inspection: InspectionInsert): Promise<Inspection> {
+  async create(inspection: InspectionInsert): Promise<CreateInspectionResult> {
+    const clientSubmissionId = inspection.client_submission_id?.trim();
+    if (!clientSubmissionId) {
+      throw new Error("client_submission_id is required");
+    }
+
+    const existingInspection = await this.getByClientSubmissionId(clientSubmissionId);
+    if (existingInspection) {
+      return { inspection: existingInspection, created: false };
+    }
+
     const { data, error } = await (supabase
       .from(this.tableName) as any)
       .insert(inspection)
       .select()
       .single();
 
-    if (error) throw new Error(`Failed to create inspection: ${error.message}`);
-    return data as unknown as Inspection;
+    if (error) {
+      if (this.isDuplicateClientSubmissionError(error)) {
+        const duplicateInspection = await this.getByClientSubmissionId(clientSubmissionId);
+        if (duplicateInspection) {
+          return { inspection: duplicateInspection, created: false };
+        }
+      }
+
+      throw new Error(`Failed to create inspection: ${error.message}`);
+    }
+
+    return { inspection: data as unknown as Inspection, created: true };
   }
 
   async delete(id: string): Promise<void> {
@@ -73,6 +103,21 @@ export class InspectionService {
     }
 
     return { total: records.length, byClassification };
+  }
+
+  private async getByClientSubmissionId(clientSubmissionId: string): Promise<Inspection | null> {
+    const { data, error } = await supabase
+      .from(this.tableName)
+      .select("*")
+      .eq("client_submission_id", clientSubmissionId)
+      .maybeSingle();
+
+    if (error) throw new Error(`Failed to fetch inspection by client submission ID: ${error.message}`);
+    return data as unknown as Inspection | null;
+  }
+
+  private isDuplicateClientSubmissionError(error: SupabaseWriteError): boolean {
+    return error.code === "23505" && error.message.includes("client_submission_id");
   }
 }
 

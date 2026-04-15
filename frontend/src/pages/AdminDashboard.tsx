@@ -104,6 +104,7 @@ const AdminDashboard = () => {
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [inspectorFilter, setInspectorFilter] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [isSavingUser, setIsSavingUser] = useState(false);
   const [userForm, setUserForm] = useState<ManagedUserForm>({
@@ -423,6 +424,16 @@ const AdminDashboard = () => {
       spoiled,
     }));
   }, [dailyAnalytics]);
+
+  const filteredInspections = useMemo(() => {
+    const query = inspectorFilter.trim().toLowerCase();
+    if (!query) return inspections;
+    return inspections.filter((inspection) => {
+      const profile = inspection.user_id ? profileById.get(inspection.user_id) : undefined;
+      const label = getInspectorLabel(profile).toLowerCase();
+      return label.includes(query);
+    });
+  }, [inspections, inspectorFilter, profileById]);
 
   const avgConfidence = useMemo(() => {
     if (inspections.length === 0) return 0;
@@ -1146,11 +1157,26 @@ const AdminDashboard = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                {inspections.length === 0 ? (
-                  <p className="py-8 text-center text-sm text-muted-foreground">No inspections yet</p>
+                <div className="mb-4">
+                  <Input
+                    placeholder="Filter by inspector name..."
+                    value={inspectorFilter}
+                    onChange={(e) => setInspectorFilter(e.target.value)}
+                    className="h-10 rounded-xl"
+                  />
+                  {inspectorFilter.trim() && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Showing {filteredInspections.length} of {inspections.length} inspection{inspections.length !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </div>
+                {filteredInspections.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    {inspectorFilter.trim() ? `No inspections found for "${inspectorFilter.trim()}"` : "No inspections yet"}
+                  </p>
                 ) : (
                   <div className="grid gap-3 lg:grid-cols-2">
-                    {inspections.map((i) => (
+                    {filteredInspections.map((i) => (
                       <div key={i.id} className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-background/50 p-3">
                         <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
                           {i.image_url ? (
@@ -1173,6 +1199,7 @@ const AdminDashboard = () => {
                               <span className="truncate font-display text-sm font-semibold capitalize">{i.meat_type}</span>
                               <FreshnessBadge classification={i.classification} size="sm" />
                             </div>
+                            <p className="truncate text-xs font-medium text-foreground/80">{getInspectorLabel(i.user_id ? profileById.get(i.user_id) : undefined)}</p>
                             <p className="text-xs text-muted-foreground">{format(new Date(i.created_at), "MMM d, yyyy h:mm a")}</p>
                             <p className="text-xs text-muted-foreground">Confidence: {i.confidence_score}%</p>
                             <p className="truncate text-[10px] text-muted-foreground">ID: {i.id}</p>

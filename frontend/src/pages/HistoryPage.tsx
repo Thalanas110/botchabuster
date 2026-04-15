@@ -2,7 +2,8 @@ import { useMemo, useState } from "react";
 import { InspectionListItem } from "@/components/InspectionListItem";
 import { useInspections } from "@/hooks/useInspections";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Loader2, ClipboardList, Search, CalendarDays, BarChart3, CheckCircle2, AlertTriangle } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Loader2, ClipboardList, Search, CalendarDays, BarChart3, CheckCircle2, AlertTriangle, ChevronLeft, ChevronRight } from "lucide-react";
 import type { FreshnessClassification } from "@/types/inspection";
 import { format } from "date-fns";
 
@@ -20,6 +21,8 @@ const HistoryPage = () => {
   const { data: inspections, isLoading } = useInspections();
   const [activeFilter, setActiveFilter] = useState<FilterOption>("all");
   const [searchText, setSearchText] = useState("");
+  const [currentPage, setCurrentPage] = useState(1);
+  const PAGE_SIZE = 6;
 
   const totalInspections = inspections?.length ?? 0;
 
@@ -70,6 +73,10 @@ const HistoryPage = () => {
       return haystack.includes(query);
     });
   }, [inspections, activeFilter, searchText]);
+
+  const totalPages = Math.max(1, Math.ceil(filteredInspections.length / PAGE_SIZE));
+  const safePage = Math.min(currentPage, totalPages);
+  const pagedInspections = filteredInspections.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const monthlyCounts = useMemo(() => {
     const monthMap = new Map<string, number>();
@@ -141,7 +148,7 @@ const HistoryPage = () => {
                 <Search className="h-4 w-4 text-muted-foreground" />
                 <input
                   value={searchText}
-                  onChange={(e) => setSearchText(e.target.value)}
+                  onChange={(e) => { setSearchText(e.target.value); setCurrentPage(1); }}
                   placeholder="Search by meat type, location, ID..."
                   className="w-full bg-transparent text-sm outline-none placeholder:text-muted-foreground"
                 />
@@ -151,7 +158,7 @@ const HistoryPage = () => {
                 {filterOptions.map((option) => (
                   <button
                     key={option.key}
-                    onClick={() => setActiveFilter(option.key)}
+                    onClick={() => { setActiveFilter(option.key); setCurrentPage(1); }}
                     className={`rounded-xl border px-2 py-2 text-[11px] uppercase tracking-widest transition-colors ${
                       activeFilter === option.key
                         ? "border-primary/40 bg-[hsl(var(--primary)/0.16)] text-foreground"
@@ -176,7 +183,34 @@ const HistoryPage = () => {
                   <p className="mt-1 text-xs">Try a different filter or search term</p>
                 </div>
               ) : (
-                filteredInspections.map((inspection) => <InspectionListItem key={inspection.id} inspection={inspection} />)
+                <>
+                  {pagedInspections.map((inspection) => <InspectionListItem key={inspection.id} inspection={inspection} />)}
+                  {totalPages > 1 && (
+                    <div className="flex items-center justify-between gap-2 pt-1">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 rounded-xl"
+                        onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                        disabled={safePage === 1}
+                      >
+                        <ChevronLeft className="h-4 w-4" /> Prev
+                      </Button>
+                      <span className="font-display text-xs text-muted-foreground uppercase tracking-wider">
+                        {safePage} / {totalPages}
+                      </span>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1 rounded-xl"
+                        onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                        disabled={safePage === totalPages}
+                      >
+                        Next <ChevronRight className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </div>
           </section>

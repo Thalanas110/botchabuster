@@ -17,6 +17,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
@@ -34,6 +35,7 @@ const ProfilePage = () => {
   const [isSavingProfile, setIsSavingProfile] = useState(false);
   const [isSavingPassword, setIsSavingPassword] = useState(false);
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
+  const [isSavingInspectPreference, setIsSavingInspectPreference] = useState(false);
   const [isLightMode, setIsLightMode] = useState(false);
 
   const initials = useMemo(() => {
@@ -46,6 +48,7 @@ const ProfilePage = () => {
   }, [fullName, user?.email]);
 
   const inspectorCode = profile?.inspector_code || "No assigned inspector code";
+  const isShowingDetailedResults = Boolean(profile?.show_detailed_results);
   const roleLabel = isAdmin ? "Administrator" : "Inspector";
 
   useEffect(() => {
@@ -193,6 +196,23 @@ const ProfilePage = () => {
     }
   };
 
+  const handleDetailedResultsToggle = async (checked: boolean) => {
+    if (!user) return;
+
+    setIsSavingInspectPreference(true);
+    try {
+      const updatedProfile = await profileClient.updateProfile(user.id, { show_detailed_results: checked });
+      setProfile(updatedProfile);
+      setProfileState(updatedProfile);
+      toast.success(checked ? "Detailed inspect results enabled" : "Simplified inspect results enabled");
+    } catch (err) {
+      console.error("Inspect result preference update failed:", err);
+      toast.error("Failed to update inspect result preference");
+    } finally {
+      setIsSavingInspectPreference(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex min-h-screen items-center justify-center">
@@ -301,6 +321,10 @@ const ProfilePage = () => {
                   <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Theme</p>
                   <p className="text-sm font-medium">{isLightMode ? "Light Mode" : "Dark Mode"}</p>
                 </div>
+                <div className="rounded-xl border border-border/70 bg-background/55 px-3 py-2.5">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Inspect Result Detail</p>
+                  <p className="text-sm font-medium">{isShowingDetailedResults ? "Detailed" : "Simplified"}</p>
+                </div>
               </div>
             </section>
           </div>
@@ -356,6 +380,20 @@ const ProfilePage = () => {
               <section className="rounded-3xl border border-border/70 bg-card/92 p-4">
                 <h3 className="font-display text-base font-semibold">Actions</h3>
                 <div className="mt-4 space-y-2">
+                  <div className="rounded-2xl border border-border/80 bg-background/55 p-3">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="space-y-1">
+                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Inspect Result Complexity</p>
+                        <p className="text-sm text-foreground">{isShowingDetailedResults ? "Show detailed technical metrics" : "Show only classification, confidence, and explanation"}</p>
+                      </div>
+                      <Switch
+                        checked={isShowingDetailedResults}
+                        onCheckedChange={(checked) => void handleDetailedResultsToggle(checked)}
+                        disabled={isSavingInspectPreference}
+                        aria-label="Toggle detailed inspect results"
+                      />
+                    </div>
+                  </div>
                   <Button
                     variant="outline"
                     onClick={handleThemeToggle}

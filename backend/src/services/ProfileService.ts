@@ -6,6 +6,7 @@ export interface Profile {
   avatar_url: string | null;
   inspector_code: string | null;
   is_dark_mode: boolean | null;
+  show_detailed_results: boolean | null;
   location: string | null;
   created_at: string;
   updated_at: string;
@@ -61,7 +62,7 @@ export class ProfileService {
     return data as unknown as Profile | null;
   }
 
-  async updateProfile(userId: string, updates: Partial<Pick<Profile, "full_name" | "avatar_url" | "location" | "is_dark_mode">>): Promise<Profile> {
+  async updateProfile(userId: string, updates: Partial<Pick<Profile, "full_name" | "avatar_url" | "location" | "is_dark_mode" | "show_detailed_results">>): Promise<Profile> {
     const payload: Record<string, unknown> = {
       id: userId,
       updated_at: new Date().toISOString(),
@@ -71,6 +72,7 @@ export class ProfileService {
     if (updates.avatar_url !== undefined) payload.avatar_url = updates.avatar_url;
     if (updates.location !== undefined) payload.location = updates.location;
     if (updates.is_dark_mode !== undefined) payload.is_dark_mode = updates.is_dark_mode;
+    if (updates.show_detailed_results !== undefined) payload.show_detailed_results = updates.show_detailed_results;
 
     const { data, error } = await (supabase
       .from("profiles") as any)

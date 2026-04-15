@@ -21,7 +21,7 @@ const meatTypes: { value: MeatType; label: string }[] = [
 ];
 
 const InspectPage = () => {
-  const { user } = useAuth();
+  const { user, profile } = useAuth();
   const [selectedMeat, setSelectedMeat] = useState<MeatType>("pork");
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
@@ -211,7 +211,7 @@ const InspectPage = () => {
             </div>
 
             {result ? (
-              <AnalysisResultCard result={result} />
+              <AnalysisResultCard result={result} showDetailedResults={Boolean(profile?.show_detailed_results)} />
             ) : (
               <div className="flex min-h-[320px] flex-col items-center justify-center rounded-2xl border border-border/70 bg-background/50 text-center text-muted-foreground">
                 <Camera className="mb-3 h-10 w-10" />

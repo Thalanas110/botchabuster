@@ -20,7 +20,7 @@ export class ProfileController {
   async updateProfile(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
-      const { full_name, avatar_url, location, is_dark_mode } = req.body;
+      const { full_name, avatar_url, location, is_dark_mode, show_detailed_results } = req.body;
       if (!id) {
         res.status(400).json({ error: "User ID is required" });
         return;
@@ -31,7 +31,12 @@ export class ProfileController {
         return;
       }
 
-      const profile = await profileService.updateProfile(id, { full_name, avatar_url, location, is_dark_mode });
+      if (show_detailed_results !== undefined && typeof show_detailed_results !== "boolean") {
+        res.status(400).json({ error: "show_detailed_results must be a boolean" });
+        return;
+      }
+
+      const profile = await profileService.updateProfile(id, { full_name, avatar_url, location, is_dark_mode, show_detailed_results });
       res.json(profile);
     } catch (error) {
       console.error("Update profile error:", error);

@@ -1,0 +1,2 @@
+ALTER TABLE public.profiles
+ADD COLUMN IF NOT EXISTS show_detailed_results BOOLEAN NOT NULL DEFAULT FALSE;

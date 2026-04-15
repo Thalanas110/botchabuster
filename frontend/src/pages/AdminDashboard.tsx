@@ -1,12 +1,13 @@
 import { useState, useEffect, useMemo } from "react";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { inspectionClient } from "@/integrations/api/InspectionClient";
 import { accessCodeClient, type AccessCode } from "@/integrations/api/AccessCodeClient";
@@ -63,6 +64,19 @@ const PIE_COLORS: Record<FreshnessClassification, string> = {
   spoiled: "hsl(0, 84%, 60%)",
 };
 
+const MEAT_TYPE_LABELS = {
+  beef: "Beef",
+  pork: "Pork",
+  chicken: "Chicken",
+  fish: "Fish",
+  other: "Other",
+} as const;
+
+const ANALYTICS_DAYS = 14;
+const MAX_ANALYTICS_ITEMS = 6;
+const UNKNOWN_INSPECTOR_LABEL = "Unknown Inspector";
+const UNSPECIFIED_LOCATION_LABEL = "Unspecified";
+
 const tabs = [
   { key: "overview" as const, label: "Overview", icon: LayoutGrid },
   { key: "users" as const, label: "Users", icon: Users },
@@ -70,8 +84,17 @@ const tabs = [
   { key: "codes" as const, label: "Access Codes", icon: KeyRound },
 ];
 
+const getInspectorLabel = (profile?: Profile) =>
+  profile?.full_name?.trim() || profile?.email?.trim() || profile?.inspector_code?.trim() || UNKNOWN_INSPECTOR_LABEL;
+
+const getLocationLabel = (inspectionLocation: string | null, profile?: Profile) =>
+  inspectionLocation?.trim() || profile?.location?.trim() || UNSPECIFIED_LOCATION_LABEL;
+
+const truncateChartLabel = (value: string) => (value.length > 12 ? `${value.slice(0, 12)}...` : value);
+
 const AdminDashboard = () => {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
@@ -223,6 +246,10 @@ const AdminDashboard = () => {
     return counts;
   }, [inspections]);
 
+  const profileById = useMemo(() => {
+    return new Map(profiles.map((profile) => [profile.id, profile]));
+  }, [profiles]);
+
   const pieData = useMemo(() => {
     return (["fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => ({
       name: c.charAt(0).toUpperCase() + c.slice(1),
@@ -231,25 +258,171 @@ const AdminDashboard = () => {
     }));
   }, [classificationCounts]);
 
-  const dailyInspections = useMemo(() => {
-    const days = 14;
-    const result: { date: string; count: number; fresh: number; spoiled: number }[] = [];
-    for (let i = days - 1; i >= 0; i--) {
+  const dailyAnalytics = useMemo(() => {
+    const buckets = new Map<
+      string,
+      {
+        date: string;
+        count: number;
+        totalConfidence: number;
+        fresh: number;
+        acceptable: number;
+        warning: number;
+        spoiled: number;
+      }
+    >();
+    const orderedKeys: string[] = [];
+
+    for (let i = ANALYTICS_DAYS - 1; i >= 0; i--) {
       const day = startOfDay(subDays(new Date(), i));
-      const dayEnd = startOfDay(subDays(new Date(), i - 1));
-      const dayInspections = inspections.filter((ins) => {
-        const d = new Date(ins.created_at);
-        return d >= day && d < dayEnd;
-      });
-      result.push({
+      const key = format(day, "yyyy-MM-dd");
+      orderedKeys.push(key);
+      buckets.set(key, {
         date: format(day, "MMM d"),
-        count: dayInspections.length,
-        fresh: dayInspections.filter((x) => x.classification === "fresh").length,
-        spoiled: dayInspections.filter((x) => x.classification === "spoiled").length,
+        count: 0,
+        totalConfidence: 0,
+        fresh: 0,
+        acceptable: 0,
+        warning: 0,
+        spoiled: 0,
       });
     }
-    return result;
+
+    inspections.forEach((inspection) => {
+      const key = format(startOfDay(new Date(inspection.created_at)), "yyyy-MM-dd");
+      const bucket = buckets.get(key);
+      if (!bucket) return;
+
+      bucket.count += 1;
+      bucket.totalConfidence += inspection.confidence_score;
+
+      switch (inspection.classification) {
+        case "fresh":
+          bucket.fresh += 1;
+          break;
+        case "acceptable":
+          bucket.acceptable += 1;
+          break;
+        case "warning":
+          bucket.warning += 1;
+          break;
+        case "spoiled":
+          bucket.spoiled += 1;
+          break;
+      }
+    });
+
+    return orderedKeys.map((key) => {
+      const bucket = buckets.get(key)!;
+      return {
+        date: bucket.date,
+        count: bucket.count,
+        fresh: bucket.fresh,
+        acceptable: bucket.acceptable,
+        warning: bucket.warning,
+        spoiled: bucket.spoiled,
+        confidence: bucket.count > 0 ? Math.round(bucket.totalConfidence / bucket.count) : 0,
+      };
+    });
   }, [inspections]);
+
+  const dailyInspections = useMemo(() => {
+    return dailyAnalytics.map(({ date, count, fresh, spoiled }) => ({
+      date,
+      count,
+      fresh,
+      spoiled,
+    }));
+  }, [dailyAnalytics]);
+
+  const inspectorAnalytics = useMemo(() => {
+    const aggregates = new Map<string, { inspector: string; count: number; totalConfidence: number }>();
+
+    inspections.forEach((inspection) => {
+      const profile = inspection.user_id ? profileById.get(inspection.user_id) : undefined;
+      const inspector = getInspectorLabel(profile);
+      const current = aggregates.get(inspector) ?? { inspector, count: 0, totalConfidence: 0 };
+      current.count += 1;
+      current.totalConfidence += inspection.confidence_score;
+      aggregates.set(inspector, current);
+    });
+
+    return Array.from(aggregates.values())
+      .sort((left, right) => right.count - left.count || right.totalConfidence - left.totalConfidence || left.inspector.localeCompare(right.inspector))
+      .slice(0, MAX_ANALYTICS_ITEMS)
+      .map((entry) => ({
+        inspector: entry.inspector,
+        count: entry.count,
+        confidence: Math.round(entry.totalConfidence / entry.count),
+      }));
+  }, [inspections, profileById]);
+
+  const meatTypeAnalytics = useMemo(() => {
+    const aggregates = new Map<keyof typeof MEAT_TYPE_LABELS, { count: number; spoiled: number }>();
+
+    inspections.forEach((inspection) => {
+      const key = inspection.meat_type as keyof typeof MEAT_TYPE_LABELS;
+      const current = aggregates.get(key) ?? { count: 0, spoiled: 0 };
+      current.count += 1;
+      if (inspection.classification === "spoiled") {
+        current.spoiled += 1;
+      }
+      aggregates.set(key, current);
+    });
+
+    return (Object.entries(MEAT_TYPE_LABELS) as Array<[keyof typeof MEAT_TYPE_LABELS, string]>)
+      .map(([key, label]) => {
+        const entry = aggregates.get(key) ?? { count: 0, spoiled: 0 };
+        return {
+          meatType: label,
+          count: entry.count,
+          spoiledRate: entry.count > 0 ? Math.round((entry.spoiled / entry.count) * 100) : 0,
+        };
+      })
+      .filter((entry) => entry.count > 0)
+      .sort((left, right) => right.count - left.count || left.meatType.localeCompare(right.meatType));
+  }, [inspections]);
+
+  const locationAnalytics = useMemo(() => {
+    const aggregates = new Map<string, { location: string; count: number; spoiled: number }>();
+
+    inspections.forEach((inspection) => {
+      const profile = inspection.user_id ? profileById.get(inspection.user_id) : undefined;
+      const location = getLocationLabel(inspection.location, profile);
+      const current = aggregates.get(location) ?? { location, count: 0, spoiled: 0 };
+      current.count += 1;
+      if (inspection.classification === "spoiled") {
+        current.spoiled += 1;
+      }
+      aggregates.set(location, current);
+    });
+
+    return Array.from(aggregates.values())
+      .sort((left, right) => right.count - left.count || right.spoiled - left.spoiled || left.location.localeCompare(right.location))
+      .slice(0, MAX_ANALYTICS_ITEMS)
+      .map((entry) => ({
+        location: entry.location,
+        count: entry.count,
+        spoiledRate: entry.count > 0 ? Math.round((entry.spoiled / entry.count) * 100) : 0,
+      }));
+  }, [inspections, profileById]);
+
+  const confidenceTrendData = useMemo(() => {
+    return dailyAnalytics.map(({ date, confidence }) => ({
+      date,
+      confidence,
+    }));
+  }, [dailyAnalytics]);
+
+  const freshnessMixData = useMemo(() => {
+    return dailyAnalytics.map(({ date, fresh, acceptable, warning, spoiled }) => ({
+      date,
+      fresh,
+      acceptable,
+      warning,
+      spoiled,
+    }));
+  }, [dailyAnalytics]);
 
   const avgConfidence = useMemo(() => {
     if (inspections.length === 0) return 0;
@@ -274,8 +447,29 @@ const AdminDashboard = () => {
   const chartConfig = {
     count: { label: "Inspections", color: "hsl(var(--primary))" },
     fresh: { label: "Fresh", color: PIE_COLORS.fresh },
+    acceptable: { label: "Acceptable", color: PIE_COLORS.acceptable },
+    warning: { label: "Warning", color: PIE_COLORS.warning },
     spoiled: { label: "Spoiled", color: PIE_COLORS.spoiled },
+    confidence: { label: "Avg Confidence", color: "hsl(var(--warning))" },
+    spoiledRate: { label: "Spoiled Rate", color: PIE_COLORS.spoiled },
     value: { label: "Count", color: "hsl(var(--primary))" },
+  };
+
+  const mobileCategoryAxisProps = {
+    tick: { fontSize: 10 },
+    tickFormatter: truncateChartLabel,
+    interval: 0 as const,
+    angle: -24,
+    textAnchor: "end" as const,
+    height: 52,
+    className: "fill-muted-foreground",
+  };
+
+  const mobileTimeAxisProps = {
+    tick: { fontSize: 10 },
+    minTickGap: 20,
+    tickMargin: 6,
+    className: "fill-muted-foreground",
   };
 
   const handleDeleteInspection = async (id: string) => {
@@ -534,6 +728,265 @@ const AdminDashboard = () => {
                   </CardContent>
                 </Card>
               )}
+
+              <section className="space-y-4">
+                <div className="rounded-3xl border border-border/70 bg-card/95 p-4">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Business Analytics</p>
+                  <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">Operational trends and risk hotspots</h2>
+                  <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                    Compare inspector output, product mix, location risk, and day-by-day quality shifts without leaving the overview.
+                  </p>
+                </div>
+
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Inspector Performance</CardTitle>
+                    <CardDescription>Track who is handling the most inspections and how confidently those results are being recorded.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Top Inspectors by Inspection Volume</p>
+                      {inspectorAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={inspectorAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="inspector" {...mobileCategoryAxisProps} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="inspector"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="hsl(var(--primary))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Average Confidence by Inspector</p>
+                      {inspectorAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={inspectorAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="inspector" {...mobileCategoryAxisProps} />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="inspector"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="confidence" radius={[0, 8, 8, 0]} fill="hsl(var(--warning))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Meat Type Trends</CardTitle>
+                    <CardDescription>Separate product throughput from spoilage risk to see which categories need more attention.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Inspections by Meat Type</p>
+                      {meatTypeAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={meatTypeAnalytics}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            <XAxis
+                              dataKey="meatType"
+                              {...(isMobile ? mobileCategoryAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                            />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="hsl(var(--primary))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Rate by Meat Type</p>
+                      {meatTypeAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={meatTypeAnalytics}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            <XAxis
+                              dataKey="meatType"
+                              {...(isMobile ? mobileCategoryAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                            />
+                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="spoiledRate" radius={[8, 8, 0, 0]} fill={PIE_COLORS.spoiled} />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Location Trends</CardTitle>
+                    <CardDescription>
+                      Blank inspection and profile locations roll up under {UNSPECIFIED_LOCATION_LABEL} so missing routing data still surfaces in the overview.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Top Locations by Inspection Count</p>
+                      {locationAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={locationAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="location" {...mobileCategoryAxisProps} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="location"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="hsl(var(--primary))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Share by Location</p>
+                      {locationAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={locationAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="location" {...mobileCategoryAxisProps} />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="location"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="spoiledRate" radius={[0, 8, 8, 0]} fill={PIE_COLORS.spoiled} />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Quality Signals</CardTitle>
+                    <CardDescription>Follow day-by-day confidence stability and how the freshness mix shifts across the recent inspection window.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Average Confidence Trend</p>
+                      <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                        <AreaChart data={confidenceTrendData}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                          <XAxis
+                            dataKey="date"
+                            {...(isMobile ? mobileTimeAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                          />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Area type="monotone" dataKey="confidence" stroke="hsl(var(--warning))" fill="hsl(var(--warning) / 0.18)" />
+                        </AreaChart>
+                      </ChartContainer>
+                    </div>
+
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Freshness Mix by Day</p>
+                        <div className="flex flex-wrap gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.fresh }} />Fresh</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.acceptable }} />Acceptable</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.warning }} />Warning</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.spoiled }} />Spoiled</span>
+                        </div>
+                      </div>
+                      <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                        <BarChart data={freshnessMixData}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                          <XAxis
+                            dataKey="date"
+                            {...(isMobile ? mobileTimeAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                          />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Bar dataKey="fresh" stackId="freshness" fill={PIE_COLORS.fresh} />
+                          <Bar dataKey="acceptable" stackId="freshness" fill={PIE_COLORS.acceptable} />
+                          <Bar dataKey="warning" stackId="freshness" fill={PIE_COLORS.warning} />
+                          <Bar dataKey="spoiled" stackId="freshness" fill={PIE_COLORS.spoiled} radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ChartContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
             </>
           )}
 

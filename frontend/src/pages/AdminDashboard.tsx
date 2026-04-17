@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -104,6 +105,9 @@ const AdminDashboard = () => {
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [pendingDeleteUserId, setPendingDeleteUserId] = useState<string | null>(null);
+  const [pendingDeleteInspectionId, setPendingDeleteInspectionId] = useState<string | null>(null);
+  const [pendingDeleteCodeId, setPendingDeleteCodeId] = useState<string | null>(null);
   const [inspectorFilter, setInspectorFilter] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [isSavingUser, setIsSavingUser] = useState(false);
@@ -224,8 +228,13 @@ const AdminDashboard = () => {
       return;
     }
 
-    const confirmed = window.confirm("Delete this user and all related records? This cannot be undone.");
-    if (!confirmed) return;
+    setPendingDeleteUserId(profileId);
+  };
+
+  const confirmDeleteUser = async () => {
+    const profileId = pendingDeleteUserId;
+    if (!profileId) return;
+    setPendingDeleteUserId(null);
 
     try {
       await profileClient.deleteUserByAdmin(profileId);
@@ -484,6 +493,14 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteInspection = async (id: string) => {
+    setPendingDeleteInspectionId(id);
+  };
+
+  const confirmDeleteInspection = async () => {
+    const id = pendingDeleteInspectionId;
+    if (!id) return;
+    setPendingDeleteInspectionId(null);
+
     try {
       await inspectionClient.delete(id);
       setInspections((prev) => prev.filter((i) => i.id !== id));
@@ -537,6 +554,14 @@ const AdminDashboard = () => {
   };
 
   const handleDeleteCode = async (id: string) => {
+    setPendingDeleteCodeId(id);
+  };
+
+  const confirmDeleteCode = async () => {
+    const id = pendingDeleteCodeId;
+    if (!id) return;
+    setPendingDeleteCodeId(null);
+
     try {
       await accessCodeClient.delete(id);
       setAccessCodes((prev) => prev.filter((c) => c.id !== id));
@@ -1331,6 +1356,36 @@ const AdminDashboard = () => {
           )}
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteUserId)}
+        onOpenChange={(open) => { if (!open) setPendingDeleteUserId(null); }}
+        title="Delete user?"
+        description="This will permanently delete the user and all related records. This cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={confirmDeleteUser}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteInspectionId)}
+        onOpenChange={(open) => { if (!open) setPendingDeleteInspectionId(null); }}
+        title="Delete inspection?"
+        description="Are you sure you want to delete this inspection record? This cannot be undone."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={confirmDeleteInspection}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteCodeId)}
+        onOpenChange={(open) => { if (!open) setPendingDeleteCodeId(null); }}
+        title="Delete access code?"
+        description="Are you sure you want to delete this access code? Users with this code will no longer be able to register."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={confirmDeleteCode}
+      />
     </div>
   );
 };

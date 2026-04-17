@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { ConfirmDialog } from "@/components/ConfirmDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { uploadClient } from "@/integrations/api/UploadClient";
@@ -37,6 +38,7 @@ const ProfilePage = () => {
   const [isUploadingAvatar, setIsUploadingAvatar] = useState(false);
   const [isSavingInspectPreference, setIsSavingInspectPreference] = useState(false);
   const [isLightMode, setIsLightMode] = useState(false);
+  const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
 
   const initials = useMemo(() => {
     const source = fullName.trim() || user?.email || "User";
@@ -404,7 +406,7 @@ const ProfilePage = () => {
                   </Button>
                   <Button
                     variant="outline"
-                    onClick={handleSignOut}
+                    onClick={() => setShowSignOutConfirm(true)}
                     className="h-11 w-full justify-start gap-2 rounded-xl border border-border/80"
                   >
                     <LogOut className="h-4 w-4" />
@@ -416,6 +418,15 @@ const ProfilePage = () => {
           </div>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={showSignOutConfirm}
+        onOpenChange={setShowSignOutConfirm}
+        title="Sign out?"
+        description="Are you sure you want to sign out of your account?"
+        confirmLabel="Sign Out"
+        onConfirm={handleSignOut}
+      />
     </div>
   );
 };

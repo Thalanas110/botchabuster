@@ -57,16 +57,17 @@ VITE_API_BASE_URL=https://YOUR-RENDER-SERVICE.onrender.com/api
 The root `render.yaml` tells Render to:
 
 - create one Node web service
-- install dependencies from the monorepo root
-- run `npm run build -w backend`
-- start with `npm run start -w backend`
+- use `backend/` as the Render service root directory
+- run `npm ci && npm run build`
+- start with `npm run start`
 - health check `GET /api/analysis/health`
+- auto-deploy only when files in `backend/` change
 
 ### Render Setup
 
 1. In Render, choose **New +** then **Blueprint**.
 2. Connect the same GitHub repo.
-3. Render will read `render.yaml` and create the backend service from this repo while building the `backend` workspace.
+3. Render will read `render.yaml` and create the backend service from the `backend/` directory in this repo.
 4. Provide these environment variables when prompted:
    - `SUPABASE_URL`
    - `SUPABASE_SERVICE_KEY`
@@ -97,6 +98,21 @@ You do not need to split this repository.
 - Netlify deploys only `frontend/`
 - Render deploys only `backend/`
 - both providers can stay connected to the same GitHub repo
+
+## Existing Render Service
+
+If your Render backend service already exists and is not managed by Blueprint yet, update it to either:
+
+- sync from the root `render.yaml`, or
+- use these manual settings in the Render Dashboard:
+
+```text
+Root Directory: backend
+Build Command: npm ci && npm run build
+Start Command: npm run start
+```
+
+The repo root also now includes a Render-aware `npm run build` and `npm start`, so a root-based service can still build the backend only if Render is using root commands.
 
 ## First Production Wiring
 

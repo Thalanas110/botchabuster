@@ -1,0 +1,16 @@
+services:
+  - type: web
+    name: meatlens-backend
+    runtime: node
+    buildCommand: npm install && npm run build -w backend
+    startCommand: npm run start -w backend
+    healthCheckPath: /api/analysis/health
+    envVars:
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_KEY
+        sync: false
+      - key: ALLOWED_ORIGINS
+        sync: false
+      - key: UPLOAD_DIR
+        value: /tmp/meatlens-uploads

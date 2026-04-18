@@ -39,7 +39,7 @@ npm run dev
 # Terminal 1 - Frontend (http://localhost:8080)
 npm run dev:frontend
 
-# Terminal 2 - Backend (http://localhost:3000)
+# Terminal 2 - Backend (http://localhost:3001)
 npm run dev:backend
 ```
 
@@ -56,22 +56,21 @@ npm run build:backend
 
 ## Environment Setup
 
-### Frontend (.env)
+### Frontend (`frontend/.env`)
 
-Create `frontend/.env`:
+Copy `frontend/.env.example` to `frontend/.env`:
 ```
-VITE_API_BASE_URL=http://localhost:3000/api
-VITE_SUPABASE_URL=your_supabase_url
-VITE_SUPABASE_ANON_KEY=your_supabase_anon_key
+VITE_API_BASE_URL=http://localhost:3001/api
 ```
 
-### Backend (.env)
+### Backend (`backend/.env`)
 
-Create `backend/.env`:
+Copy `backend/.env.example` to `backend/.env`:
 ```
 SUPABASE_URL=your_supabase_url
-SUPABASE_KEY=your_supabase_service_role_key
-PORT=3000
+SUPABASE_SERVICE_KEY=your_supabase_service_role_key
+PORT=3001
+ALLOWED_ORIGINS=http://localhost:8080,http://127.0.0.1:8080
 ```
 
 ## Frontend
@@ -150,6 +149,8 @@ npm run test:watch      # Watch tests
 ## Project Documentation
 
 See `MIGRATION_SUMMARY.md` for migration notes and architecture decisions.
+
+For deployment steps, see `documentation/DEPLOYMENT.md`.
 
 ## License
 

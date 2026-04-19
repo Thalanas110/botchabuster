@@ -2,13 +2,16 @@ services:
   - type: web
     name: meatlens-backend
     runtime: node
-    rootDir: backend
     buildCommand: npm ci && npm run build
     startCommand: npm run start
     healthCheckPath: /api/analysis/health
     buildFilter:
       paths:
         - backend/**
+        - package.json
+        - package-lock.json
+        - .npmrc
+        - scripts/run-build.mjs
     envVars:
       - key: SUPABASE_URL
         sync: false

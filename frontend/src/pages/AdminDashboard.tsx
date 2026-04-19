@@ -605,7 +605,7 @@ const AdminDashboard = () => {
                 <p className="text-xs text-muted-foreground">System management and analytics hub</p>
               </div>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex w-full flex-col items-stretch gap-2 min-[420px]:w-auto min-[420px]:flex-row min-[420px]:items-center">
               <Button variant="outline" size="sm" onClick={() => void loadData()} className="gap-2 rounded-xl">
                 <RefreshCcw className="h-4 w-4" />
                 Refresh
@@ -1027,8 +1027,8 @@ const AdminDashboard = () => {
           )}
 
           {activeTab === "users" && (
-            <div className="grid gap-4 xl:grid-cols-[0.95fr_1.05fr]">
-              <Card className="rounded-3xl border-border/70 bg-card/95">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
                     <UserPlus className="h-4 w-4" />
@@ -1115,7 +1115,7 @@ const AdminDashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-3xl border-border/70 bg-card/95">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
                     <Users className="h-4 w-4" />
@@ -1143,7 +1143,7 @@ const AdminDashboard = () => {
                             <p>Location: {p.location || "No location"}</p>
                             <p className="break-all">Inspector Code: {p.inspector_code || "N/A"}</p>
                           </div>
-                          <div className="mt-3 flex items-center gap-2">
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
                             <Button
                               variant="outline"
                               size="sm"
@@ -1200,10 +1200,10 @@ const AdminDashboard = () => {
                     {inspectorFilter.trim() ? `No inspections found for "${inspectorFilter.trim()}"` : "No inspections yet"}
                   </p>
                 ) : (
-                  <div className="grid gap-3 lg:grid-cols-2">
+                  <div className="grid min-w-0 gap-3 lg:grid-cols-2">
                     {filteredInspections.map((i) => (
                       <div key={i.id} className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-background/50 p-3">
-                        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-2 sm:gap-3">
+                        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
                           {i.image_url ? (
                             <button
                               type="button"
@@ -1229,14 +1229,16 @@ const AdminDashboard = () => {
                             <p className="text-xs text-muted-foreground">Confidence: {i.confidence_score}%</p>
                             <p className="truncate text-[10px] text-muted-foreground">ID: {i.id}</p>
                           </div>
-                          <Button
-                            variant="outline"
-                            size="icon"
-                            className="h-8 w-8 rounded-xl border-border/70 text-destructive hover:text-destructive sm:h-9 sm:w-9"
-                            onClick={() => void handleDeleteInspection(i.id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                          <div className="col-span-2 flex justify-end border-t border-border/60 pt-2 sm:col-span-1 sm:block sm:border-t-0 sm:pt-0">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 rounded-xl border-border/70 text-destructive hover:text-destructive sm:h-9 sm:w-9"
+                              onClick={() => void handleDeleteInspection(i.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1247,8 +1249,8 @@ const AdminDashboard = () => {
           )}
 
           {activeTab === "codes" && (
-            <div className="grid gap-4 xl:grid-cols-[0.9fr_1.1fr]">
-              <Card className="rounded-3xl border-border/70 bg-card/95">
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                 <CardHeader>
                   <CardTitle className="text-sm font-display uppercase tracking-wider">Create Access Code</CardTitle>
                 </CardHeader>
@@ -1278,7 +1280,7 @@ const AdminDashboard = () => {
                 </CardContent>
               </Card>
 
-              <Card className="rounded-3xl border-border/70 bg-card/95">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                 <CardHeader>
                   <CardTitle className="text-sm font-display uppercase tracking-wider">Manage Access Codes</CardTitle>
                 </CardHeader>
@@ -1289,7 +1291,7 @@ const AdminDashboard = () => {
                     <div className="space-y-3">
                       {accessCodes.map((c) => (
                         <div key={c.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
-                          <div className="flex items-start justify-between gap-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
                             <div className="min-w-0 flex-1">
                               <div className="mb-1 flex items-center gap-2">
                                 <span className="font-display text-sm font-semibold tracking-wider">{c.code}</span>
@@ -1300,7 +1302,7 @@ const AdminDashboard = () => {
                               {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}
                               <p className="mt-1 text-[10px] text-muted-foreground">Used {c.times_used}x - Created {format(new Date(c.created_at), "MMM d, yyyy")}</p>
                             </div>
-                            <div className="flex items-center gap-1">
+                            <div className="flex flex-wrap items-center gap-1">
                               <Button
                                 variant="outline"
                                 size="icon"

@@ -97,7 +97,8 @@ export function AIChatbot() {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="fixed bottom-20 right-4 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95"
+        data-testid="ai-chat-toggle"
+        className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] right-3 z-50 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-transform hover:scale-105 active:scale-95 sm:bottom-20 sm:right-4"
         aria-label="Open AI chat"
       >
         <MessageCircle className="h-6 w-6" />
@@ -106,8 +107,10 @@ export function AIChatbot() {
   }
 
   return (
-    <div className="fixed bottom-20 right-4 z-50 flex w-[340px] flex-col rounded-xl border border-border bg-card shadow-2xl sm:w-[380px]"
-      style={{ height: "min(500px, calc(100vh - 120px))" }}
+    <div
+      data-testid="ai-chat-window"
+      className="fixed bottom-[calc(env(safe-area-inset-bottom,0px)+5rem)] left-3 right-3 z-50 flex w-[calc(100vw-1.5rem)] max-w-[380px] flex-col rounded-xl border border-border bg-card shadow-2xl sm:bottom-20 sm:left-auto sm:right-4 sm:w-[380px]"
+      style={{ height: "min(500px, calc(100dvh - 7.5rem - env(safe-area-inset-bottom, 0px)))" }}
     >
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
@@ -134,7 +137,7 @@ export function AIChatbot() {
                 m.role === "user"
                   ? "bg-primary text-primary-foreground"
                   : "bg-secondary text-secondary-foreground"
-              }`}
+              } break-words`}
             >
               {m.content}
             </div>

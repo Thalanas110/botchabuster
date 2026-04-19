@@ -225,13 +225,13 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
         <canvas ref={canvasRef} className="hidden" />
       </div>
 
-      <div className="flex w-full gap-3">
+      <div className="flex w-full flex-col gap-3 min-[380px]:flex-row">
         {capturedImage ? (
           <>
-            <Button variant="outline" onClick={retake} disabled={disabled} className="flex-1 gap-2 rounded-xl">
+            <Button variant="outline" onClick={retake} disabled={disabled} className="w-full gap-2 rounded-xl min-[380px]:flex-1">
               <RotateCcw className="h-4 w-4" /> Retake
             </Button>
-            <Button onClick={confirmCapture} disabled={disabled} className="flex-1 gap-2 rounded-xl">
+            <Button onClick={confirmCapture} disabled={disabled} className="w-full gap-2 rounded-xl min-[380px]:flex-1">
               <Check className="h-4 w-4" /> Use Photo
             </Button>
           </>
@@ -240,11 +240,11 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
             <Camera className="h-5 w-5" /> {isVideoReady ? "Capture" : "Starting..."}
           </Button>
         ) : (
-          <div className="flex w-full gap-3">
-            <Button onClick={() => void startCamera()} size="lg" className="flex-1 gap-2 rounded-xl" disabled={disabled || isStarting}>
+          <div className="flex w-full flex-col gap-3 min-[380px]:flex-row">
+            <Button onClick={() => void startCamera()} size="lg" className="w-full gap-2 rounded-xl min-[380px]:flex-1" disabled={disabled || isStarting}>
               <Camera className="h-5 w-5" /> {isStarting ? "Starting..." : "Open Camera"}
             </Button>
-            <label className="flex-1">
+            <label className="w-full min-[380px]:flex-1">
               <Button
                 variant="outline"
                 size="lg"

@@ -31,11 +31,14 @@ export function InspectionListItem({ inspection, onClick, className }: Inspectio
       )}
       onClick={onClick}
     >
-      <CardContent className="flex items-center gap-3 p-3">
+      <CardContent
+        data-testid="inspection-card-layout"
+        className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-3 p-3 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center"
+      >
         {inspection.image_url ? (
           <button
             type="button"
-            className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 touch-manipulation cursor-zoom-in"
+            className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 touch-manipulation cursor-zoom-in sm:h-16 sm:w-16"
             onClick={(event) => {
               event.stopPropagation();
               setIsPreviewOpen(true);
@@ -49,13 +52,13 @@ export function InspectionListItem({ inspection, onClick, className }: Inspectio
             <img src={inspection.image_url} alt="Sample" className="h-full w-full object-cover" />
           </button>
         ) : (
-          <div className={cn("flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border border-border/70", surfaceByClass)}>
+          <div className={cn("flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl border border-border/70 sm:h-16 sm:w-16", surfaceByClass)}>
             <span className="font-display text-lg text-muted-foreground">{inspection.meat_type[0].toUpperCase()}</span>
           </div>
         )}
 
         <div className="min-w-0 flex-1">
-          <div className="mb-1 flex items-center justify-between gap-2">
+          <div className="mb-1 flex flex-wrap items-center gap-2">
             <span className="rounded-full border border-border/70 bg-background/65 px-2 py-0.5 text-[10px] uppercase tracking-widest text-muted-foreground">
               {format(new Date(inspection.created_at), "MMM d, yyyy")}
             </span>
@@ -73,7 +76,10 @@ export function InspectionListItem({ inspection, onClick, className }: Inspectio
           )}
         </div>
 
-        <div className="flex-shrink-0 text-right">
+        <div
+          data-testid="inspection-metrics"
+          className="col-span-2 flex items-end justify-between gap-3 border-t border-border/60 pt-2 sm:col-span-1 sm:block sm:border-t-0 sm:pt-0 sm:text-right"
+        >
           <p className="font-display text-lg font-bold">{inspection.confidence_score}%</p>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">confidence</p>
           <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">

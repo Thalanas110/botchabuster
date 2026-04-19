@@ -88,8 +88,8 @@ const HistoryPage = () => {
   }, [inspections]);
 
   return (
-    <div className="min-h-screen bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] pb-24">
-      <div className="mx-auto w-full max-w-6xl px-4 pt-4">
+    <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] pb-24">
+      <div className="mx-auto w-full max-w-6xl min-w-0 px-4 pt-4">
         <section className="rounded-3xl border border-border/70 bg-card/90 p-4 shadow-[0_24px_70px_-34px_rgba(0,0,0,0.65)]">
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
@@ -134,8 +134,8 @@ const HistoryPage = () => {
           </div>
         </section>
 
-        <div className="mt-4 grid gap-4 lg:grid-cols-[1.08fr_0.92fr]">
-          <section className="rounded-3xl border border-border/70 bg-card/92 p-4">
+        <div className="mt-4 grid min-w-0 gap-4 lg:grid-cols-[1.08fr_0.92fr]">
+          <section className="min-w-0 rounded-3xl border border-border/70 bg-card/92 p-4">
             <div className="flex flex-wrap items-center justify-between gap-3">
               <h2 className="font-display text-base font-semibold">Inspection Timeline</h2>
               <span className="rounded-full border border-border/70 bg-background/55 px-3 py-1 text-[11px] uppercase tracking-widest text-muted-foreground">
@@ -154,7 +154,7 @@ const HistoryPage = () => {
                 />
               </div>
 
-              <div className="mt-2 grid grid-cols-2 gap-2 sm:grid-cols-5">
+              <div className="mt-2 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
                 {filterOptions.map((option) => (
                   <button
                     key={option.key}
@@ -215,7 +215,7 @@ const HistoryPage = () => {
             </div>
           </section>
 
-          <section className="space-y-4">
+          <section className="min-w-0 space-y-4">
             <Card className="rounded-3xl border-border/70 bg-card/95">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">

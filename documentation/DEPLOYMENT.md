@@ -91,6 +91,37 @@ Notes:
 - Wildcards are supported, so `https://*--your-site.netlify.app` allows Netlify preview and branch deploys for the same site.
 - Requests without an `Origin` header, such as health checks, are still allowed.
 
+### Keeping the Render service awake
+
+If your Render plan idles services after inactivity, a simple scheduled ping will keep the backend from spinning down.
+
+- A GitHub Actions workflow has been added at [.github/workflows/keep-awake.yml](.github/workflows/keep-awake.yml) which pings the health endpoint every 5 minutes.
+- To change the schedule or endpoint, edit that workflow or create a Render Scheduled Job via the Render dashboard or `render.yaml`.
+
+#### Using cron-job.org
+
+If you prefer the hosted service cron-job.org, add a scheduled HTTP job that pings the health endpoint:
+
+- **URL:** https://meatlens-backend.onrender.com/api/analysis/health
+- **Method:** GET
+- **Schedule:** every 5 minutes (UI or cron expression: `*/5 * * * *`)
+- **Timeout:** 10s (or the default)
+- **Save & enable** the job.
+
+Notes:
+
+- Ensure the Render URL is publicly reachable from cron-job.org.
+- If your health endpoint requires a secret token, put it in an HTTP header or a query param and do NOT commit the token to the repo; use the cron-job.org secret storage if available.
+- If you already use the GitHub Actions workflow, you can keep both; either will prevent the service from idling.
+
+Quick test (run locally):
+
+```bash
+curl -i https://meatlens-backend.onrender.com/api/analysis/health
+```
+
+
+
 ## Monorepo Notes
 
 You do not need to split this repository.

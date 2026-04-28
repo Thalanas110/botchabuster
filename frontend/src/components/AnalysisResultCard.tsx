@@ -24,9 +24,9 @@ export function AnalysisResultCard({ result, showDetailedResults = true, classNa
           <p className="text-[10px] font-display uppercase tracking-widest text-muted-foreground">Confidence</p>
           <div className="mt-1 flex items-center gap-2">
             <div className="h-2 flex-1 overflow-hidden rounded-full bg-secondary">
-              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${result.confidence_score}%` }} />
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${(result.confidence_score * 100).toFixed(0)}%` }} />
             </div>
-            <span className="font-display text-sm font-bold">{result.confidence_score}%</span>
+            <span className="font-display text-sm font-bold">{(result.confidence_score * 100).toFixed(0)}%</span>
           </div>
         </CardContent>
       </Card>

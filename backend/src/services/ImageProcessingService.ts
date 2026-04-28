@@ -1,10 +1,5 @@
-/**
- * ImageProcessingService
- * 
- * Handles OpenCV image loading, preprocessing, and ROI extraction.
- * Uses opencv4nodejs for native OpenCV bindings.
- */
 import sharp from "sharp";
+import cv from "@techstark/opencv-js";
 
 export interface ImageQualityAssessment {
   accepted: boolean;
@@ -66,52 +61,152 @@ export class ImageProcessingService {
     };
   }
 
-  /**
-   * Load and preprocess image from file path.
-   * Applies noise reduction and normalizes based on calibration card.
-   */
   async preprocessImage(imagePath: string): Promise<Buffer> {
-    // TODO: Implement with opencv4nodejs
-    // 1. cv.imread(imagePath)
-    // 2. Apply Gaussian blur for noise reduction
-    // 3. Detect calibration card ROI
-    // 4. Normalize white balance using calibration card
-    // 5. Extract meat sample ROI
-    // 6. Return processed image buffer
-    
-    const fs = await import("fs");
-    return fs.promises.readFile(imagePath);
+    return sharp(imagePath).blur(1).jpeg().toBuffer();
   }
 
-
-  
-
-  /**
-   * Detect and extract calibration card region from the image.
-   */
+  // Looks for a white/neutral calibration card using HSV thresholding + contour filtering.
   async detectCalibrationCard(imagePath: string): Promise<{
     found: boolean;
     region?: { x: number; y: number; width: number; height: number };
     whitePoint?: { r: number; g: number; b: number };
   }> {
-    // TODO: Implement color card detection
-    // 1. Convert to HSV
-    // 2. Threshold for white/neutral regions
-    // 3. Find contours matching expected card aspect ratio
-    // 4. Extract white point for calibration
-    return { found: false };
+    const { data, info } = await sharp(imagePath)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const rgba = new cv.Mat(info.height, info.width, cv.CV_8UC4);
+    rgba.data.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+    const mat = new cv.Mat();
+    cv.cvtColor(rgba, mat, cv.COLOR_RGBA2BGR);
+    rgba.delete();
+
+    const hsvMat = new cv.Mat();
+    cv.cvtColor(mat, hsvMat, cv.COLOR_BGR2HSV);
+    mat.delete();
+
+    // Threshold for white/near-white: low saturation, high value
+    const { rows, cols } = hsvMat;
+    const hsvData = hsvMat.data as Uint8Array;
+    const maskData = new Uint8Array(rows * cols);
+    for (let i = 0; i < rows * cols; i++) {
+      const s = hsvData[i * 3 + 1];
+      const v = hsvData[i * 3 + 2];
+      maskData[i] = (s <= 50 && v >= 180) ? 255 : 0;
+    }
+    hsvMat.delete();
+
+    const mask = new cv.Mat(rows, cols, cv.CV_8UC1);
+    mask.data.set(maskData);
+    const contours = new cv.MatVector();
+    const hierarchy = new cv.Mat();
+    cv.findContours(mask, contours, hierarchy, cv.RETR_EXTERNAL, cv.CHAIN_APPROX_SIMPLE);
+    mask.delete();
+    hierarchy.delete();
+
+    const imageArea = info.width * info.height;
+    let bestRect: { x: number; y: number; width: number; height: number } | null = null;
+    let bestArea = 0;
+
+    for (let i = 0; i < (contours.size() as unknown as number); i++) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const rect = cv.boundingRect(contours.get(i)) as any;
+      const area = rect.width * rect.height;
+      const ratio = rect.width / rect.height;
+      if (area > imageArea * 0.01 && area < imageArea * 0.4 && ratio > 0.5 && ratio < 2.0 && area > bestArea) {
+        bestArea = area;
+        bestRect = { x: rect.x, y: rect.y, width: rect.width, height: rect.height };
+      }
+    }
+    contours.delete();
+
+    if (!bestRect) return { found: false };
+
+    const roiPixels = await sharp(imagePath)
+      .extract({ left: bestRect.x, top: bestRect.y, width: bestRect.width, height: bestRect.height })
+      .removeAlpha()
+      .raw()
+      .toBuffer();
+
+    const pixelCount = bestRect.width * bestRect.height;
+    let sumR = 0, sumG = 0, sumB = 0;
+    for (let i = 0; i < pixelCount; i++) {
+      sumR += roiPixels[i * 3];
+      sumG += roiPixels[i * 3 + 1];
+      sumB += roiPixels[i * 3 + 2];
+    }
+
+    return {
+      found: true,
+      region: bestRect,
+      whitePoint: {
+        r: Math.round(sumR / pixelCount),
+        g: Math.round(sumG / pixelCount),
+        b: Math.round(sumB / pixelCount),
+      },
+    };
   }
 
-  /**
-   * Extract the meat sample region of interest.
-   */
+  // Segments the meat area from the background using Lab color range,
+  // then cleans up the mask with morphological open/close operations.
   async extractMeatROI(imagePath: string): Promise<Buffer> {
-    // TODO: Implement ROI extraction
-    // 1. Use color segmentation to isolate meat from background
-    // 2. Find largest contour
-    // 3. Create mask and extract ROI
-    const fs = await import("fs");
-    return fs.promises.readFile(imagePath);
+    const { data, info } = await sharp(imagePath)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const rgba = new cv.Mat(info.height, info.width, cv.CV_8UC4);
+    rgba.data.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+    const mat = new cv.Mat();
+    cv.cvtColor(rgba, mat, cv.COLOR_RGBA2BGR);
+    rgba.delete();
+
+    const labMat = new cv.Mat();
+    cv.cvtColor(mat, labMat, cv.COLOR_BGR2Lab);
+
+    // Segment reddish/pinkish tones: moderate L, a* above midpoint (reddish), moderate b*
+    const { rows, cols } = labMat;
+    const labData = labMat.data as Uint8Array;
+    const maskData = new Uint8Array(rows * cols);
+    for (let i = 0; i < rows * cols; i++) {
+      const L = labData[i * 3];
+      const a = labData[i * 3 + 1];
+      const b = labData[i * 3 + 2];
+      maskData[i] = (L >= 30 && L <= 220 && a >= 130 && a <= 200 && b >= 115 && b <= 200) ? 255 : 0;
+    }
+    labMat.delete();
+
+    const mask = new cv.Mat(rows, cols, cv.CV_8UC1);
+    mask.data.set(maskData);
+
+    const kernel = cv.getStructuringElement(cv.MORPH_ELLIPSE, new cv.Size(7, 7));
+    const closed = new cv.Mat();
+    cv.morphologyEx(mask, closed, cv.MORPH_CLOSE, kernel);
+    mask.delete();
+    const opened = new cv.Mat();
+    cv.morphologyEx(closed, opened, cv.MORPH_OPEN, kernel);
+    closed.delete();
+    kernel.delete();
+
+    const mask3ch = new cv.Mat();
+    cv.cvtColor(opened, mask3ch, cv.COLOR_GRAY2BGR);
+    opened.delete();
+
+    const result = new cv.Mat();
+    cv.bitwise_and(mat, mask3ch, result);
+    mat.delete();
+    mask3ch.delete();
+
+    const rgb = new cv.Mat();
+    cv.cvtColor(result, rgb, cv.COLOR_BGR2RGB);
+    result.delete();
+    const rawBuffer = Buffer.from(rgb.data as Uint8Array);
+    rgb.delete();
+
+    return sharp(rawBuffer, { raw: { width: info.width, height: info.height, channels: 3 } })
+      .jpeg()
+      .toBuffer();
   }
 
   private computeLaplacianVariance(pixels: Buffer, width: number, height: number): number {

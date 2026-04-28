@@ -1,10 +1,6 @@
-/**
- * ColorAnalysisService
- * 
- * Extracts CIE Lab* color space metrics from meat sample images.
- * Lab* is preferred for meat freshness as it models human color perception
- * and separates luminance from chromaticity.
- */
+import sharp from 'sharp';
+import cv from '@techstark/opencv-js';
+
 export interface LabValues {
   l: number; // Lightness (0-100)
   a: number; // Green-Red axis (-128 to 127)
@@ -23,26 +19,31 @@ export class ColorAnalysisService {
     return ColorAnalysisService.instance;
   }
 
-  /**
-   * Extract mean Lab* values from the meat sample ROI.
-   * 
-   * Process:
-   * 1. Convert BGR to Lab color space using cv.cvtColor(img, cv.COLOR_BGR2Lab)
-   * 2. Calculate mean values across the ROI
-   * 3. Apply calibration correction if available
-   */
   async extractLabValues(imageBuffer: Buffer): Promise<LabValues> {
-    // TODO: Implement with opencv4nodejs
-    // const img = cv.imdecode(imageBuffer);
-    // const labImg = img.cvtColor(cv.COLOR_BGR2Lab);
-    // const mean = labImg.mean();
-    // return { l: mean.x, a: mean.y, b: mean.z };
-    
-    // Placeholder values for structure
+    const { data, info } = await sharp(imageBuffer)
+      .ensureAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const rgba = new cv.Mat(info.height, info.width, cv.CV_8UC4);
+    rgba.data.set(new Uint8Array(data.buffer, data.byteOffset, data.byteLength));
+    const bgr = new cv.Mat();
+    cv.cvtColor(rgba, bgr, cv.COLOR_RGBA2BGR);
+    rgba.delete();
+
+    const lab = new cv.Mat();
+    cv.cvtColor(bgr, lab, cv.COLOR_BGR2Lab);
+    bgr.delete();
+
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const mean = cv.mean(lab) as any;
+    lab.delete();
+
+    // 8-bit Lab encoding: L channel [0, 255] maps to [0, 100]; a and b channels offset by 128
     return {
-      l: 50 + Math.random() * 15,
-      a: 15 + Math.random() * 10,
-      b: 10 + Math.random() * 8,
+      l: (mean[0] / 255) * 100,
+      a: mean[1] - 128,
+      b: mean[2] - 128,
     };
   }
 

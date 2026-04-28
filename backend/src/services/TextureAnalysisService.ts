@@ -5,6 +5,8 @@
  * from meat sample images. GLCM captures spatial relationships between
  * pixel intensities, useful for detecting surface degradation.
  */
+import sharp from 'sharp';
+
 export interface GLCMFeatures {
   contrast: number;      // Intensity contrast between pixel and neighbor
   correlation: number;   // Linear dependency of gray levels
@@ -24,33 +26,44 @@ export class TextureAnalysisService {
     return TextureAnalysisService.instance;
   }
 
-  /**
-   * Compute GLCM features from grayscale image.
-   * 
-   * Process:
-   * 1. Convert to grayscale
-   * 2. Quantize to N gray levels (typically 8 or 16)
-   * 3. Compute GLCM at distance=1, angles=[0°, 45°, 90°, 135°]
-   * 4. Normalize GLCM
-   * 5. Extract Haralick features
-   */
   async computeGLCMFeatures(
     imageBuffer: Buffer,
     levels: number = 8,
     distance: number = 1
   ): Promise<GLCMFeatures> {
-    // TODO: Implement GLCM computation
-    // 1. Convert to grayscale: cv.cvtColor(img, cv.COLOR_BGR2GRAY)
-    // 2. Quantize: gray.divide(256/levels).convertTo(cv.CV_8U)
-    // 3. Build co-occurrence matrix for each angle
-    // 4. Average features across angles
-    
-    // Placeholder with realistic ranges
+    const { data, info } = await sharp(imageBuffer)
+      .greyscale()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const { width: cols, height: rows } = info;
+    const step = Math.floor(256 / levels);
+    const grayImage: number[][] = [];
+    for (let r = 0; r < rows; r++) {
+      grayImage.push([]);
+      for (let c = 0; c < cols; c++) {
+        const val = data[r * cols + c];
+        grayImage[r].push(Math.min(Math.floor(val / step), levels - 1));
+      }
+    }
+
+    const angles = [
+      { dx: distance,  dy: 0        },
+      { dx: distance,  dy: -distance },
+      { dx: 0,         dy: distance  },
+      { dx: -distance, dy: distance  },
+    ];
+
+    const allFeatures = angles.map(({ dx, dy }) => {
+      const glcm = this.buildGLCM(grayImage, dx, dy, levels);
+      return this.extractFeatures(glcm, levels);
+    });
+
     return {
-      contrast: Math.random() * 40 + 5,
-      correlation: 0.85 + Math.random() * 0.14,
-      energy: 0.15 + Math.random() * 0.35,
-      homogeneity: 0.55 + Math.random() * 0.4,
+      contrast:    allFeatures.reduce((s, f) => s + f.contrast,    0) / allFeatures.length,
+      correlation: allFeatures.reduce((s, f) => s + f.correlation, 0) / allFeatures.length,
+      energy:      allFeatures.reduce((s, f) => s + f.energy,      0) / allFeatures.length,
+      homogeneity: allFeatures.reduce((s, f) => s + f.homogeneity, 0) / allFeatures.length,
     };
   }
 

@@ -1,4 +1,5 @@
 import type { Inspection, InspectionInsert } from "@/types/inspection";
+import { IS_DEMO_MODE, demoDelay, DEMO_INSPECTIONS, DEMO_STATS } from "@/lib/demoMode";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 const SESSION_STORAGE_KEY = "meatlens-auth-session";
@@ -43,6 +44,7 @@ export class InspectionClient {
   }
 
   async getAll(limit = 50, offset = 0, scope: InspectionScope = "mine"): Promise<Inspection[]> {
+    if (IS_DEMO_MODE) return demoDelay(DEMO_INSPECTIONS.slice(offset, offset + limit));
     const res = await fetch(`${API_BASE_URL}/inspections?limit=${limit}&offset=${offset}&scope=${scope}`, {
       headers: this.createHeaders(),
     });
@@ -51,6 +53,7 @@ export class InspectionClient {
   }
 
   async getById(id: string, scope: InspectionScope = "mine"): Promise<Inspection | null> {
+    if (IS_DEMO_MODE) return demoDelay(DEMO_INSPECTIONS.find((i) => i.id === id) ?? null);
     const res = await fetch(`${API_BASE_URL}/inspections/${id}?scope=${scope}`, {
       headers: this.createHeaders(),
     });
@@ -62,6 +65,31 @@ export class InspectionClient {
   }
 
   async create(inspection: InspectionInsert): Promise<Inspection> {
+    if (IS_DEMO_MODE) {
+      const newItem: Inspection = {
+        id: `demo-insp-${Date.now()}`,
+        user_id: "demo-user-001",
+        lab_l: inspection.lab_l ?? null,
+        lab_a: inspection.lab_a ?? null,
+        lab_b: inspection.lab_b ?? null,
+        glcm_contrast: inspection.glcm_contrast ?? null,
+        glcm_correlation: inspection.glcm_correlation ?? null,
+        glcm_energy: inspection.glcm_energy ?? null,
+        glcm_homogeneity: inspection.glcm_homogeneity ?? null,
+        flagged_deviations: inspection.flagged_deviations ?? [],
+        explanation: inspection.explanation ?? null,
+        image_url: inspection.image_url ?? null,
+        location: inspection.location ?? null,
+        inspector_notes: inspection.inspector_notes ?? null,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        meat_type: inspection.meat_type,
+        classification: inspection.classification,
+        confidence_score: inspection.confidence_score,
+      };
+      DEMO_INSPECTIONS.unshift(newItem);
+      return demoDelay(newItem);
+    }
     const res = await fetch(`${API_BASE_URL}/inspections`, {
       method: "POST",
       headers: this.createHeaders({ "Content-Type": "application/json" }),
@@ -72,6 +100,11 @@ export class InspectionClient {
   }
 
   async delete(id: string): Promise<void> {
+    if (IS_DEMO_MODE) {
+      const idx = DEMO_INSPECTIONS.findIndex((i) => i.id === id);
+      if (idx !== -1) DEMO_INSPECTIONS.splice(idx, 1);
+      return demoDelay(undefined);
+    }
     const res = await fetch(`${API_BASE_URL}/inspections/${id}`, {
       method: "DELETE",
       headers: this.createHeaders(),
@@ -83,6 +116,7 @@ export class InspectionClient {
     total: number;
     byClassification: Record<string, number>;
   }> {
+    if (IS_DEMO_MODE) return demoDelay({ ...DEMO_STATS, byClassification: { ...DEMO_STATS.byClassification } });
     const res = await fetch(`${API_BASE_URL}/inspections/stats?scope=${scope}`, {
       headers: this.createHeaders(),
     });

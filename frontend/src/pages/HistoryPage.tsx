@@ -28,7 +28,7 @@ const HistoryPage = () => {
 
   const avgConfidence = useMemo(() => {
     if (!inspections?.length) return 0;
-    return Math.round(inspections.reduce((sum, item) => sum + item.confidence_score, 0) / inspections.length);
+    return Math.round(inspections.reduce((sum, item) => sum + item.confidence_score * 100, 0) / inspections.length);
   }, [inspections]);
 
   const classificationCounts = useMemo(() => {

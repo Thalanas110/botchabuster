@@ -1,4 +1,5 @@
 import type { AnalysisResult } from "@/types/inspection";
+import { IS_DEMO_MODE, demoDelay, DEMO_ANALYSIS_RESULT } from "@/lib/demoMode";
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 
@@ -25,6 +26,10 @@ export class AnalysisClient {
   }
 
   async analyzeImage(imageFile: File, meatType: string): Promise<AnalysisResult> {
+    if (IS_DEMO_MODE) {
+      const score = parseFloat((0.75 + Math.random() * 0.24).toFixed(2));
+      return demoDelay({ ...DEMO_ANALYSIS_RESULT, confidence_score: score });
+    }
     const formData = new FormData();
     formData.append("image", imageFile);
     formData.append("meat_type", meatType);
@@ -44,6 +49,7 @@ export class AnalysisClient {
   }
 
   async healthCheck(): Promise<boolean> {
+    if (IS_DEMO_MODE) return demoDelay(true);
     try {
       const response = await fetch(`${API_BASE_URL}/analysis/health`);
       return response.ok;

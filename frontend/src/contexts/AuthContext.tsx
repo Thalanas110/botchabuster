@@ -1,6 +1,11 @@
 import { createContext, useContext, useEffect, useState, useCallback, type ReactNode } from "react";
 import { authClient, type AuthSession, type AuthUser } from "@/integrations/api/AuthClient";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
+import {
+  storeOfflineCredential,
+  verifyOfflineCredential,
+  clearOfflineCredential,
+} from "@/lib/offlineCredentials";
 
 const USER_STORAGE_KEY = "meatlens-auth-user";
 const SESSION_STORAGE_KEY = "meatlens-auth-session";
@@ -11,7 +16,7 @@ interface AuthContextType {
   profile: Profile | null;
   isAdmin: boolean;
   isLoading: boolean;
-  signIn: (email: string, password: string) => Promise<void>;
+  signIn: (email: string, password: string) => Promise<{ isAdmin: boolean }>;
   signUp: (email: string, password: string, fullName: string, accessCode?: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
@@ -99,13 +104,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     };
   }, [loadUserData]);
 
-  const signIn = async (email: string, password: string) => {
+  const signIn = async (email: string, password: string): Promise<{ isAdmin: boolean }> => {
+    // ── Offline path ──────────────────────────────────────────────────────────
+    if (!navigator.onLine) {
+      const { valid, isAdmin: cachedAdmin } = await verifyOfflineCredential(email, password);
+      if (!valid) {
+        throw new Error(
+          "Cannot sign in offline — credentials not recognised. " +
+          "Please connect to the internet to sign in for the first time.",
+        );
+      }
+      const storedUser = window.localStorage.getItem(USER_STORAGE_KEY);
+      if (!storedUser) {
+        throw new Error(
+          "No cached session found. Please sign in online at least once before going offline.",
+        );
+      }
+      const cachedUser = JSON.parse(storedUser) as AuthUser;
+      const cachedSession = window.localStorage.getItem(SESSION_STORAGE_KEY)
+        ? (JSON.parse(window.localStorage.getItem(SESSION_STORAGE_KEY)!) as AuthSession)
+        : null;
+      setUser(cachedUser);
+      setSession(cachedSession);
+      setIsAdmin(cachedAdmin);
+      // Best-effort profile restore (no network needed if React Query has it cached)
+      await loadUserData(cachedUser).catch(() => {});
+      return { isAdmin: cachedAdmin };
+    }
+
+    // ── Online path ───────────────────────────────────────────────────────────
     const result = await authClient.signIn(email, password);
     setUser(result.user);
     setSession(result.session);
     window.localStorage.setItem(USER_STORAGE_KEY, JSON.stringify(result.user));
     window.localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(result.session));
     await loadUserData(result.user);
+    const admin = await profileClient.hasRole(result.user.id, "admin");
+    // Persist a hash for future offline re-authentication
+    void storeOfflineCredential(email, password, admin);
+    return { isAdmin: admin };
   };
 
   const signUp = async (email: string, password: string, fullName: string, accessCode?: string) => {
@@ -119,13 +156,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
-    await authClient.signOut();
+    // Always clear in-memory state immediately
     setUser(null);
     setSession(null);
     setProfile(null);
     setIsAdmin(false);
-    window.localStorage.removeItem(USER_STORAGE_KEY);
-    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+
+    if (navigator.onLine) {
+      // Online: notify server and fully clear local storage
+      try { await authClient.signOut(); } catch { /* ignore */ }
+      window.localStorage.removeItem(USER_STORAGE_KEY);
+      window.localStorage.removeItem(SESSION_STORAGE_KEY);
+      clearOfflineCredential();
+    }
+    // Offline: keep localStorage so the user can re-authenticate offline.
+    // The credential hash and cached session are preserved but in-memory
+    // state is cleared, so the app treats the user as signed out.
   };
 
   const resetPassword = async (email: string) => {

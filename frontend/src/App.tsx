@@ -9,6 +9,9 @@ import { ProtectedRoute, AdminRoute } from "@/components/ProtectedRoute";
 import { BottomNav } from "@/components/BottomNav";
 import { AIChatbot } from "@/components/AIChatbot";
 import { NetworkLoadingScreen } from "@/components/NetworkLoadingScreen";
+import { OfflineBanner } from "@/components/OfflineBanner";
+import { OfflineSyncManager } from "@/components/OfflineSyncManager";
+import { InactivityGuard } from "@/components/InactivityGuard";
 import { useStartupNetworkCheck } from "@/hooks/useStartupNetworkCheck";
 import { applyTheme } from "@/lib/themePreference";
 import LandingPage from "./pages/LandingPage";
@@ -22,7 +25,18 @@ import AdminDashboard from "./pages/AdminDashboard";
 import ProfilePage from "./pages/ProfilePage";
 import NotFound from "./pages/NotFound";
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 1000 * 60 * 5, // 5 min
+      gcTime: 1000 * 60 * 60 * 24, // keep cache 24 h so offline users see their data
+      retry: (failureCount, _error) => {
+        if (!navigator.onLine) return false;
+        return failureCount < 2;
+      },
+    },
+  },
+});
 
 function AppLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -37,7 +51,10 @@ function AppLayout({ children }: { children: React.ReactNode }) {
 function NetworkStartupGate({ children }: { children: React.ReactNode }) {
   const { status, retry } = useStartupNetworkCheck();
 
-  if (status !== "ready") {
+  // Only hard-block while the initial connectivity check is in flight.
+  // Once we know the outcome (ready, offline, or server unreachable) let
+  // the app render — users will see cached data and an OfflineBanner.
+  if (status === "checking") {
     return <NetworkLoadingScreen status={status} onRetry={retry} />;
   }
 
@@ -66,12 +83,15 @@ function ThemeRouteController() {
 const App = () => {
   return (
   <QueryClientProvider client={queryClient}>
+    <OfflineBanner />
     <TooltipProvider>
       <Toaster />
       <Sonner />
       <BrowserRouter>
         <NetworkStartupGate>
           <AuthProvider>
+            <OfflineSyncManager />
+            <InactivityGuard />
             <ThemeRouteController />
             <Routes>
               {/* Public routes */}

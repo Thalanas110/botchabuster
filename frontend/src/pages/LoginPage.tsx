@@ -19,8 +19,8 @@ const LoginPage = () => {
     e.preventDefault();
     setLoading(true);
     try {
-      await signIn(email, password);
-      navigate("/inspect");
+      const { isAdmin } = await signIn(email, password);
+      navigate(isAdmin ? "/admin" : "/inspect");
     } catch (err: any) {
       toast.error(err.message || "Sign in failed");
     } finally {

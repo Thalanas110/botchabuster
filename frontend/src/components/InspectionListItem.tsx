@@ -80,7 +80,7 @@ export function InspectionListItem({ inspection, onClick, className }: Inspectio
           data-testid="inspection-metrics"
           className="col-span-2 flex items-end justify-between gap-3 border-t border-border/60 pt-2 sm:col-span-1 sm:block sm:border-t-0 sm:pt-0 sm:text-right"
         >
-          <p className="font-display text-lg font-bold">{(inspection.confidence_score * 100).toFixed(0)}%</p>
+          <p className="font-display text-lg font-bold">{inspection.confidence_score}%</p>
           <p className="text-[10px] uppercase tracking-widest text-muted-foreground">confidence</p>
           <p className="mt-1 flex items-center justify-end gap-1 text-[10px] text-muted-foreground">
             <Hash className="h-3 w-3" />

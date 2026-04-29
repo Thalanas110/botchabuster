@@ -1,5 +1,6 @@
 import { useState, useCallback, useRef } from "react";
 import { CameraCapture } from "@/components/CameraCapture";
+import { CalibrationBanner } from "@/components/CalibrationBanner";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -7,10 +8,12 @@ import { useAnalyzeImage } from "@/hooks/useAnalysis";
 import { useCreateInspection } from "@/hooks/useInspections";
 import type { AnalysisResult, MeatType } from "@/types/inspection";
 import { AnalysisApiError } from "@/integrations/api/AnalysisClient";
-import { Loader2, Save, RotateCcw, Microscope, TestTube2, Camera, ScanLine } from "lucide-react";
+import { Loader2, Save, RotateCcw, Microscope, TestTube2, Camera, ScanLine, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadClient } from "@/integrations/api";
+import { queueScan } from "@/lib/offlineQueue";
+import { analyzeOffline } from "@/lib/offlineAnalysis";
 
 const meatTypes: { value: MeatType; label: string }[] = [
   { value: "pork", label: "Pork" },
@@ -26,7 +29,7 @@ const InspectPage = () => {
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "queued">("idle");
   const [clientSubmissionId, setClientSubmissionId] = useState<string | null>(null);
   const saveLockRef = useRef(false);
   const analyzeImage = useAnalyzeImage();
@@ -42,16 +45,28 @@ const InspectPage = () => {
     setClientSubmissionId(createClientSubmissionId());
   }, [saveStatus]);
 
+
   const handleAnalyze = useCallback(async () => {
     if (!capturedFile) return;
+
     setIsAnalyzing(true);
     try {
-      const analysisResult = await analyzeImage.mutateAsync({
-        file: capturedFile,
-        meatType: selectedMeat,
-      });
+      let analysisResult: AnalysisResult;
+
+      if (!navigator.onLine) {
+        // ── Offline path: run entirely in-browser ───────────────────────────
+        analysisResult = await analyzeOffline(capturedFile, selectedMeat);
+        toast.success("Offline analysis complete — save will sync when reconnected.");
+      } else {
+        // ── Online path: use backend on Render ──────────────────────────
+        analysisResult = await analyzeImage.mutateAsync({
+          file: capturedFile,
+          meatType: selectedMeat,
+        });
+        toast.success("Analysis complete");
+      }
+
       setResult(analysisResult);
-      toast.success("Analysis complete");
     } catch (error) {
       setResult(null);
       if (error instanceof AnalysisApiError) {
@@ -67,16 +82,40 @@ const InspectPage = () => {
   }, [capturedFile, selectedMeat, analyzeImage]);
 
   const handleSave = useCallback(async () => {
-    if (!result || !capturedFile || saveLockRef.current || saveStatus === "saved") return;
+    if (!result || !capturedFile || saveLockRef.current || saveStatus === "saved" || saveStatus === "queued") return;
     if (!user) {
       toast.error("Please sign in to save inspections");
       return;
     }
 
     const submissionId = clientSubmissionId ?? createClientSubmissionId();
+    setClientSubmissionId(submissionId);
+
+    // ── Offline path: queue with already-computed result ─────────────────────
+    if (!navigator.onLine) {
+      try {
+        const imageData = await capturedFile.arrayBuffer();
+        await queueScan({
+          id: submissionId,
+          imageData,
+          imageType: capturedFile.type,
+          imageName: capturedFile.name,
+          meatType: selectedMeat,
+          queuedAt: new Date().toISOString(),
+          userId: user.id,
+          analysisResult: result,
+        });
+        setSaveStatus("queued");
+        toast.info("You're offline — save queued. It'll upload & record when you reconnect.");
+      } catch {
+        toast.error("Failed to queue save for offline storage.");
+      }
+      return;
+    }
+
+    // ── Online path ─────────────────────────────────────────────────────────
     saveLockRef.current = true;
     setSaveStatus("saving");
-    setClientSubmissionId(submissionId);
 
     try {
       let imageUrl: string | null = null;
@@ -121,6 +160,7 @@ const InspectPage = () => {
     saveLockRef.current = false;
     setClientSubmissionId(null);
   }, []);
+
 
   return (
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))] pb-24">
@@ -167,6 +207,8 @@ const InspectPage = () => {
               Capture Station
             </div>
 
+            <CalibrationBanner />
+
             <div className="mb-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
               {meatTypes.map(({ value, label }) => (
                 <button
@@ -190,7 +232,8 @@ const InspectPage = () => {
                 <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="w-full gap-2 rounded-xl font-display uppercase tracking-wider">
                   {isAnalyzing ? (
                     <>
-                      <Loader2 className="h-5 w-5 animate-spin" /> Processing...
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      {navigator.onLine ? "Processing..." : "Analyzing offline..."}
                     </>
                   ) : (
                     <>
@@ -240,10 +283,18 @@ const InspectPage = () => {
               >
                 {saveStatus === "saving" || createInspection.isPending ? (
                   <Loader2 className="h-4 w-4 animate-spin" />
+                ) : saveStatus === "queued" ? (
+                  <Clock className="h-4 w-4" />
                 ) : (
                   <Save className="h-4 w-4" />
                 )}
-                {saveStatus === "saved" ? "Record Saved" : saveStatus === "saving" ? "Saving..." : "Save Record"}
+                {saveStatus === "saved"
+                  ? "Record Saved"
+                  : saveStatus === "saving"
+                  ? "Saving..."
+                  : saveStatus === "queued"
+                  ? "Queued for Sync"
+                  : "Save Record"}
               </Button>
             </div>
           </section>

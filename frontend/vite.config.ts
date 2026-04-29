@@ -17,9 +17,12 @@ export default defineConfig(({ mode }) => ({
       registerType: "autoUpdate",
       includeAssets: ["favicon.ico", "robots.txt"],
       workbox: {
-        globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp}"],
-        navigateFallbackDenylist: [/^\/~oauth/],
+        globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,webp,json,bin}"],
+        // SPA fallback: serve the cached shell for any navigation when offline
+        navigateFallback: "/index.html",
+        navigateFallbackDenylist: [/^\/~oauth/, /^\/api\//],
         runtimeCaching: [
+          // Google Fonts stylesheet — cache-first, 1 year
           {
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "CacheFirst",
@@ -29,12 +32,44 @@ export default defineConfig(({ mode }) => ({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          // Google Fonts files — cache-first, 1 year
           {
             urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
             handler: "CacheFirst",
             options: {
               cacheName: "gstatic-fonts-cache",
               expiration: { maxEntries: 10, maxAgeSeconds: 60 * 60 * 24 * 365 },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Backend API GET requests — network-first so fresh data is preferred,
+          // but fall back to cache when offline (covers /inspections, /stats, /profiles)
+          {
+            urlPattern: ({ url, request }: { url: URL; request: Request }) =>
+              request.method === "GET" &&
+              (url.pathname.startsWith("/api/") ||
+                url.href.includes("/api/")),
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "api-cache",
+              networkTimeoutSeconds: 8,
+              expiration: {
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24, // 24 h
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // Supabase storage images — stale-while-revalidate, 7 days
+          {
+            urlPattern: /^https:\/\/.*\.supabase\.co\/storage\/.*/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "supabase-storage-cache",
+              expiration: {
+                maxEntries: 100,
+                maxAgeSeconds: 60 * 60 * 24 * 7,
+              },
               cacheableResponse: { statuses: [0, 200] },
             },
           },

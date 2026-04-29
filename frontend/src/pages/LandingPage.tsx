@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
+import { Sheet, SheetClose, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { useAuth } from "@/contexts/AuthContext";
 import { statsClient } from "@/integrations/api";
 import {
@@ -16,6 +17,7 @@ import {
   Sparkles,
   ScanLine,
   CheckCircle2,
+  Menu,
 } from "lucide-react";
 
 const features = [
@@ -151,21 +153,21 @@ const LandingPage = () => {
   return (
     <div className="min-h-screen overflow-x-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))]">
       <header className="sticky top-0 z-40 border-b border-border/70 bg-background/85 backdrop-blur-md">
-        <div className="mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-3 px-4 py-3">
-          <div className="flex items-center gap-2">
+        <div className="mx-auto flex w-full max-w-6xl min-w-0 items-center justify-between gap-3 px-4 py-3 sm:gap-4">
+          <div className="flex min-w-0 items-center gap-2">
             <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-[hsl(var(--primary)/0.16)]">
               <ShieldCheck className="h-5 w-5 text-primary" />
             </div>
-            <div>
+            <div className="min-w-0">
               <p className="font-display text-sm font-semibold uppercase tracking-wider">MeatLens</p>
               <p className="text-[10px] text-muted-foreground">Inspection Intelligence</p>
             </div>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="hidden items-center gap-2 sm:flex">
             {user ? (
               <Link to="/inspect">
-                <Button size="sm" className="rounded-xl font-display uppercase tracking-wider gap-1">
+                <Button size="sm" className="rounded-xl font-display gap-1 uppercase tracking-wider">
                   Open App <ChevronRight className="h-4 w-4" />
                 </Button>
               </Link>
@@ -184,36 +186,79 @@ const LandingPage = () => {
               </>
             )}
           </div>
+
+          <div className="sm:hidden">
+            <Sheet>
+              <SheetTrigger asChild>
+                <Button variant="ghost" size="icon" className="rounded-xl border border-border/70" aria-label="Open navigation menu">
+                  <Menu className="h-5 w-5" />
+                </Button>
+              </SheetTrigger>
+              <SheetContent side="right" className="w-[85vw] max-w-[320px] border-border/70 bg-card/95 p-5">
+                <SheetHeader className="mb-5 border-b border-border/60 pb-4 text-left">
+                  <SheetTitle className="font-display text-base uppercase tracking-wide">Menu</SheetTitle>
+                </SheetHeader>
+                <div className="grid gap-2">
+                  {user ? (
+                    <SheetClose asChild>
+                      <Link to="/inspect">
+                        <Button className="w-full rounded-xl font-display uppercase tracking-wider gap-2">
+                          Open App <ChevronRight className="h-4 w-4" />
+                        </Button>
+                      </Link>
+                    </SheetClose>
+                  ) : (
+                    <>
+                      <SheetClose asChild>
+                        <Link to="/signup">
+                          <Button className="w-full rounded-xl font-display uppercase tracking-wider">
+                            Get Started
+                          </Button>
+                        </Link>
+                      </SheetClose>
+                      <SheetClose asChild>
+                        <Link to="/login">
+                          <Button variant="outline" className="w-full rounded-xl font-display uppercase tracking-wider">
+                            Sign In
+                          </Button>
+                        </Link>
+                      </SheetClose>
+                    </>
+                  )}
+                </div>
+              </SheetContent>
+            </Sheet>
+          </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-6xl min-w-0 px-4 py-6 sm:py-8">
-        <section className="rounded-3xl border border-border/70 bg-card/92 p-5 shadow-[0_26px_70px_-36px_rgba(0,0,0,0.72)] sm:p-6">
-          <div className="grid min-w-0 gap-6 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
-            <div className="min-w-0">
+      <main className="mx-auto w-full max-w-6xl min-w-0 px-3 py-5 sm:px-4 sm:py-8">
+        <section className="rounded-3xl border border-border/70 bg-card/92 p-4 shadow-[0_26px_70px_-36px_rgba(0,0,0,0.72)] sm:p-6">
+          <div className="grid min-w-0 gap-5 lg:grid-cols-[1.05fr_0.95fr] lg:items-center">
+            <div className="min-w-0 text-center lg:text-left">
               <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-primary/35 bg-[hsl(var(--primary)/0.16)] px-3 py-1.5">
                 <Sparkles className="h-3.5 w-3.5 text-primary" />
                 <span className="font-display text-[11px] uppercase tracking-widest text-primary">AI-assisted Field Inspection</span>
               </div>
 
-              <h1 className="font-display text-3xl font-bold uppercase leading-[1.1] tracking-tight sm:text-4xl lg:text-5xl">
+              <h1 className="font-display text-[clamp(1.85rem,8.2vw,3rem)] font-bold uppercase leading-[1.08] tracking-tight">
                 Objective Meat Freshness Checks,
                 <span className="text-primary"> Designed for Real Market Flow</span>
               </h1>
 
-              <p className="mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base">
+              <p className="mx-auto mt-4 max-w-xl text-sm leading-relaxed text-muted-foreground sm:text-base lg:mx-0">
                 MeatLens helps inspectors perform faster and more consistent decisions using image-based color and texture analytics aligned to health guidance.
               </p>
 
-              <div className="mt-6 flex flex-wrap gap-2">
-                <Link to={user ? "/inspect" : "/signup"}>
-                  <Button size="lg" className="rounded-xl px-7 font-display text-xs uppercase tracking-wider gap-2">
+              <div className="mt-6 grid gap-2 sm:flex sm:flex-wrap">
+                <Link to={user ? "/inspect" : "/signup"} className="w-full sm:w-auto">
+                  <Button size="lg" className="w-full rounded-xl px-7 font-display text-xs uppercase tracking-wider sm:w-auto gap-2">
                     {user ? "Start Inspecting" : "Create Inspector Account"}
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </Link>
-                <Link to={user ? "/history" : "/login"}>
-                  <Button variant="outline" size="lg" className="rounded-xl px-6 font-display text-xs uppercase tracking-wider">
+                <Link to={user ? "/history" : "/login"} className="w-full sm:w-auto">
+                  <Button variant="outline" size="lg" className="w-full rounded-xl px-6 font-display text-xs uppercase tracking-wider sm:w-auto">
                     {user ? "View History" : "Sign In"}
                   </Button>
                 </Link>
@@ -243,13 +288,13 @@ const LandingPage = () => {
         </section>
 
         <section className="mt-4 rounded-3xl border border-border/70 bg-card/88 p-4 sm:p-5">
-          <h2 className="mb-3 font-display text-sm uppercase tracking-wider text-muted-foreground">Inspection Workflow</h2>
+          <h2 className="mb-3 font-display text-xs uppercase tracking-wider text-muted-foreground sm:text-sm">Inspection Workflow</h2>
           <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {workflow.map((step) => (
-              <div key={step.title} className="rounded-2xl border border-border/70 bg-background/55 p-3">
+              <div key={step.title} className="rounded-2xl border border-border/70 bg-background/55 p-3.5 sm:p-3">
                 <step.icon className="mb-2 h-4 w-4 text-primary" />
                 <p className="font-display text-sm font-semibold uppercase tracking-wider">{step.title}</p>
-                <p className="mt-1 text-xs text-muted-foreground">{step.desc}</p>
+                <p className="mt-1 text-xs leading-relaxed text-muted-foreground">{step.desc}</p>
               </div>
             ))}
           </div>
@@ -288,21 +333,21 @@ const LandingPage = () => {
           </div>
         </section>
 
-        <section className="mt-4 rounded-3xl border border-border/70 bg-card/95 p-6 text-center sm:p-8">
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/95 p-5 text-center sm:p-8">
           <h2 className="font-display text-2xl font-bold uppercase tracking-tight sm:text-3xl">Ready to Inspect?</h2>
           <p className="mx-auto mt-3 max-w-2xl text-sm text-muted-foreground sm:text-base">
             Get your organization access code and start running objective inspections with measurable confidence.
           </p>
-          <div className="mt-5 flex flex-wrap items-center justify-center gap-2">
-            <Link to={user ? "/inspect" : "/signup"}>
-              <Button size="lg" className="rounded-xl px-10 font-display uppercase tracking-wider gap-2">
+          <div className="mt-5 grid gap-2 sm:flex sm:flex-wrap sm:items-center sm:justify-center">
+            <Link to={user ? "/inspect" : "/signup"} className="w-full sm:w-auto">
+              <Button size="lg" className="w-full rounded-xl px-10 font-display uppercase tracking-wider sm:w-auto gap-2">
                 {user ? "Go to Inspect" : "Get Started Now"}
                 <ChevronRight className="h-4 w-4" />
               </Button>
             </Link>
             {!user && (
-              <Link to="/login">
-                <Button variant="outline" size="lg" className="rounded-xl px-8 font-display uppercase tracking-wider">
+              <Link to="/login" className="w-full sm:w-auto">
+                <Button variant="outline" size="lg" className="w-full rounded-xl px-8 font-display uppercase tracking-wider sm:w-auto">
                   Sign In
                 </Button>
               </Link>

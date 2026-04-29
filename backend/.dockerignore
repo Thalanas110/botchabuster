@@ -1,0 +1,10 @@
+node_modules
+dist
+uploads
+*.log
+.env
+.env.*
+!.env.example
+coverage
+*.test.ts
+supabase

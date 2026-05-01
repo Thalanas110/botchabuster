@@ -1,0 +1,58 @@
+import { test, expect } from "@playwright/test";
+import { mockCommonApi, seedSignedInSession } from "./helpers/app";
+import { uploadSamplePhoto } from "./helpers/image";
+
+test("prevents saving the same analyzed record more than once", async ({ page }) => {
+  test.setTimeout(120_000);
+
+  await seedSignedInSession(page, { userId: "user-1" });
+  await mockCommonApi(page, { userId: "user-1" });
+
+  await page.goto("/inspect");
+  await uploadSamplePhoto(page);
+  await page.getByRole("button", { name: "Use Photo" }).click();
+  const analyzeButton = page.getByRole("button", { name: /Analyze Sample|Preparing ResNet50/i });
+  await expect(analyzeButton).toBeVisible();
+  await expect(analyzeButton).toBeEnabled({ timeout: 30_000 });
+  await analyzeButton.click();
+
+  await expect(page.getByRole("heading", { name: "Classification" })).toBeVisible({ timeout: 60_000 });
+
+  let uploadCalls = 0;
+  let createCalls = 0;
+
+  await page.route("**/api/upload/inspection-image", async (route) => {
+    uploadCalls += 1;
+    await new Promise((resolve) => setTimeout(resolve, 400));
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ imageUrl: "https://example.com/sample.jpg" }),
+    });
+  });
+
+  await page.route("**/api/inspections", async (route) => {
+    if (route.request().method() === "POST") {
+      createCalls += 1;
+      await route.fulfill({
+        status: 200,
+        contentType: "application/json",
+        body: JSON.stringify({ id: "inspection-1" }),
+      });
+      return;
+    }
+    await route.fallback();
+  });
+
+  const saveButton = page.getByRole("button", { name: "Save Record" });
+  await expect(saveButton).toBeVisible();
+
+  await saveButton.evaluate((button) => {
+    (button as HTMLButtonElement).click();
+    (button as HTMLButtonElement).click();
+  });
+
+  await expect.poll(() => uploadCalls).toBe(1);
+  await expect.poll(() => createCalls).toBe(1);
+  await expect(page.getByRole("button", { name: "Record Saved" })).toBeDisabled();
+});

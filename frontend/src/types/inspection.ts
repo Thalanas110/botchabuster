@@ -46,6 +46,8 @@ export interface InspectionInsert {
 export interface AnalysisResult {
   classification: FreshnessClassification;
   confidence_score: number;
+  model_confidence_score?: number | null;
+  rule_confidence_score?: number | null;
   lab_values: { l: number; a: number; b: number };
   glcm_features: {
     contrast: number;
@@ -55,6 +57,8 @@ export interface AnalysisResult {
   };
   flagged_deviations: string[];
   explanation: string;
+  analysis_source?: "resnet50+rules" | "rules-only" | "backend";
+  model_path?: string | null;
 }
 
 export interface ApiConfig {

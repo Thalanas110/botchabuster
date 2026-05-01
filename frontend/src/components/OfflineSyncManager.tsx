@@ -17,7 +17,7 @@ async function processScan(
   queryClient: ReturnType<typeof useQueryClient>,
 ): Promise<void> {
   if (!scan.analysisResult) {
-    // Should not happen post-refactor, but guard defensively
+    // Should not happen post-refactor, but guard defensively.
     console.warn("[OfflineSyncManager] Scan missing analysisResult, skipping:", scan.id);
     await removeScan(scan.id);
     return;
@@ -26,12 +26,12 @@ async function processScan(
   const result = scan.analysisResult;
   const imageFile = new File([scan.imageData], scan.imageName, { type: scan.imageType });
 
-  // Upload image to Supabase Storage (non-fatal)
+  // Upload image to Supabase Storage (non-fatal).
   let imageUrl: string | null = null;
   try {
     imageUrl = await uploadClient.uploadInspectionImage(imageFile, scan.userId);
   } catch {
-    // save without image rather than blocking
+    // Save without image rather than blocking.
   }
 
   await inspectionClient.create({
@@ -58,14 +58,14 @@ async function processScan(
   queryClient.invalidateQueries({ queryKey: ["inspection-stats"] });
 
   const label = scan.meatType.charAt(0).toUpperCase() + scan.meatType.slice(1);
-  toast.success(`Synced offline scan: ${label} — ${result.classification}`);
+  toast.success(`Synced offline scan: ${label} - ${result.classification}`);
 }
 
 /**
  * Mount this component once inside <AuthProvider>.
  * - Drains the offline scan queue when the device comes back online.
- * - Pre-warms the MobileNetV3 model in the background so it's cached for
- *   the next offline session.
+ * - Pre-warms the ResNet50 ONNX model in the background for the next
+ *   offline session.
  */
 export function OfflineSyncManager() {
   const { user } = useAuth();
@@ -83,14 +83,14 @@ export function OfflineSyncManager() {
       const mine = pending.filter((s) => s.userId === user.id);
       if (mine.length === 0) return;
 
-      toast.info(`Syncing ${mine.length} queued scan${mine.length > 1 ? "s" : ""}…`);
+      toast.info(`Syncing ${mine.length} queued scan${mine.length > 1 ? "s" : ""}...`);
 
       for (const scan of mine) {
         try {
           await processScan(scan, queryClient);
         } catch (err) {
           console.error("[OfflineSyncManager] Failed to sync scan:", err);
-          toast.error("A queued scan failed to sync — will retry when reconnected.");
+          toast.error("A queued scan failed to sync - will retry when reconnected.");
           break;
         }
       }
@@ -101,7 +101,7 @@ export function OfflineSyncManager() {
 
   useEffect(() => {
     void drainQueue();
-    // Start loading MobileNetV3 weights into IndexedDB while online
+    // Start loading ResNet50 weights while online.
     prewarmModel();
 
     const handleOnline = () => {

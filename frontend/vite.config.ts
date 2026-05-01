@@ -73,6 +73,36 @@ export default defineConfig(({ mode }) => ({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
+          // ONNX model files — cache-first after first successful fetch.
+          {
+            urlPattern: ({ url }: { url: URL }) =>
+              url.pathname.endsWith(".onnx") &&
+              (url.pathname.startsWith("/model/") || url.pathname.startsWith("/models/")),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "onnx-model-cache",
+              expiration: {
+                maxEntries: 6,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
+          // ONNX Runtime sidecar assets used by the WASM backend.
+          {
+            urlPattern: ({ url }: { url: URL }) =>
+              url.pathname.startsWith("/ort/") &&
+              (url.pathname.endsWith(".wasm") || url.pathname.endsWith(".mjs")),
+            handler: "CacheFirst",
+            options: {
+              cacheName: "onnx-runtime-cache",
+              expiration: {
+                maxEntries: 20,
+                maxAgeSeconds: 60 * 60 * 24 * 30,
+              },
+              cacheableResponse: { statuses: [0, 200] },
+            },
+          },
         ],
       },
       manifest: {

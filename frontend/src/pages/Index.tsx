@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { CameraCapture } from "@/components/CameraCapture";
 import { CalibrationBanner } from "@/components/CalibrationBanner";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
@@ -14,6 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { uploadClient } from "@/integrations/api";
 import { queueScan } from "@/lib/offlineQueue";
 import { analyzeOffline } from "@/lib/offlineAnalysis";
+import { loadResNet50Model, isModelReady as getResNetModelReady } from "@/lib/offlineAnalysis/resNet50Onnx";
 
 const meatTypes: { value: MeatType; label: string }[] = [
   { value: "pork", label: "Pork" },
@@ -29,11 +30,68 @@ const InspectPage = () => {
   const [capturedFile, setCapturedFile] = useState<File | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
+  const [isModelReady, setIsModelReady] = useState<boolean>(() => !navigator.onLine || getResNetModelReady());
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "queued">("idle");
   const [clientSubmissionId, setClientSubmissionId] = useState<string | null>(null);
   const saveLockRef = useRef(false);
   const analyzeImage = useAnalyzeImage();
   const createInspection = useCreateInspection();
+
+  useEffect(() => {
+    let isCancelled = false;
+    let retryTimerId: number | null = null;
+
+    const updateReadiness = (ready: boolean) => {
+      if (isCancelled) return;
+      setIsModelReady(!navigator.onLine || ready);
+    };
+
+    const warmup = async () => {
+      if (!navigator.onLine) {
+        updateReadiness(true);
+        return;
+      }
+
+      if (getResNetModelReady()) {
+        updateReadiness(true);
+        return;
+      }
+
+      updateReadiness(false);
+      const loaded = await loadResNet50Model({ forceRetry: true });
+      if (isCancelled) return;
+
+      if (loaded || getResNetModelReady()) {
+        updateReadiness(true);
+        return;
+      }
+
+      retryTimerId = window.setTimeout(() => {
+        void warmup();
+      }, 1500);
+    };
+
+    const handleOnline = () => {
+      void warmup();
+    };
+
+    const handleOffline = () => {
+      updateReadiness(true);
+    };
+
+    void warmup();
+    window.addEventListener("online", handleOnline);
+    window.addEventListener("offline", handleOffline);
+
+    return () => {
+      isCancelled = true;
+      if (retryTimerId !== null) {
+        window.clearTimeout(retryTimerId);
+      }
+      window.removeEventListener("online", handleOnline);
+      window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
 
   const handleCapture = useCallback((file: File) => {
     if (saveStatus === "saving") return;
@@ -48,22 +106,43 @@ const InspectPage = () => {
 
   const handleAnalyze = useCallback(async () => {
     if (!capturedFile) return;
+    if (navigator.onLine && !isModelReady) {
+      toast.info("Preparing ResNet50 model. Please wait a moment.");
+      return;
+    }
 
     setIsAnalyzing(true);
     try {
       let analysisResult: AnalysisResult;
 
-      if (!navigator.onLine) {
-        // ── Offline path: run entirely in-browser ───────────────────────────
+      try {
+        // Always prefer local ResNet50 ONNX analysis first.
         analysisResult = await analyzeOffline(capturedFile, selectedMeat);
-        toast.success("Offline analysis complete — save will sync when reconnected.");
-      } else {
-        // ── Online path: use backend on Render ──────────────────────────
-        analysisResult = await analyzeImage.mutateAsync({
+
+        if (analysisResult.analysis_source === "resnet50+rules") {
+          toast.success("ResNet50 ONNX analysis complete.");
+        } else {
+          toast.warning(
+            navigator.onLine
+              ? "ResNet50 model was not ready after waiting; ran rules-only fallback. Retry once more."
+              : "Model unavailable offline; ran rules-only fallback."
+          );
+        }
+      } catch (offlineError) {
+        if (!navigator.onLine) {
+          throw offlineError;
+        }
+
+        const backendResult = await analyzeImage.mutateAsync({
           file: capturedFile,
           meatType: selectedMeat,
         });
-        toast.success("Analysis complete");
+        analysisResult = {
+          ...backendResult,
+          analysis_source: "backend",
+          model_path: null,
+        };
+        toast.warning("Local ONNX analysis failed; used backend fallback.");
       }
 
       setResult(analysisResult);
@@ -79,7 +158,7 @@ const InspectPage = () => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [capturedFile, selectedMeat, analyzeImage]);
+  }, [capturedFile, selectedMeat, analyzeImage, isModelReady]);
 
   const handleSave = useCallback(async () => {
     if (!result || !capturedFile || saveLockRef.current || saveStatus === "saved" || saveStatus === "queued") return;
@@ -229,11 +308,21 @@ const InspectPage = () => {
 
             {capturedFile && !result && (
               <div className="mt-4">
-                <Button onClick={handleAnalyze} disabled={isAnalyzing} size="lg" className="w-full gap-2 rounded-xl font-display uppercase tracking-wider">
+                <Button
+                  onClick={handleAnalyze}
+                  disabled={isAnalyzing || (navigator.onLine && !isModelReady)}
+                  size="lg"
+                  className="w-full gap-2 rounded-xl font-display uppercase tracking-wider"
+                >
                   {isAnalyzing ? (
                     <>
                       <Loader2 className="h-5 w-5 animate-spin" />
-                      {navigator.onLine ? "Processing..." : "Analyzing offline..."}
+                      Analyzing sample...
+                    </>
+                  ) : navigator.onLine && !isModelReady ? (
+                    <>
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                      Preparing ResNet50...
                     </>
                   ) : (
                     <>

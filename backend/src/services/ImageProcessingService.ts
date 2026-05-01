@@ -6,6 +6,9 @@ export interface ImageQualityAssessment {
   reasons: string[];
   metrics: {
     blurScore: number;
+    contrastVariance: number;
+    adaptiveBlurThreshold: number;
+    rejectBlurThreshold: number;
     centerOffsetX: number;
     centerOffsetY: number;
   };
@@ -14,8 +17,11 @@ export interface ImageQualityAssessment {
 export class ImageProcessingService {
   private static instance: ImageProcessingService;
 
-  // Tuned for downscaled grayscale images in [0,255].
-  private readonly blurThreshold = 90;
+  // Blur gating is adaptive to scene contrast to avoid false positives on smooth cuts.
+  private readonly baseBlurThreshold = 95;
+  private readonly minAdaptiveBlurThreshold = 55;
+  private readonly contrastReferenceVariance = 900;
+  private readonly strictBlurRejectionFactor = 0.75;
   private readonly maxCenterOffset = 0.18;
 
   private constructor() {}
@@ -35,12 +41,15 @@ export class ImageProcessingService {
       .toBuffer({ resolveWithObject: true });
 
     const blurScore = this.computeLaplacianVariance(data, info.width, info.height);
+    const contrastVariance = this.computeVariance(data);
+    const adaptiveBlurThreshold = this.computeAdaptiveBlurThreshold(contrastVariance);
+    const rejectBlurThreshold = adaptiveBlurThreshold * this.strictBlurRejectionFactor;
     const { offsetX, offsetY } = this.computeForegroundCenterOffset(data, info.width, info.height);
 
     const reasons: string[] = [];
-    if (blurScore < this.blurThreshold) {
+    if (blurScore < rejectBlurThreshold) {
       reasons.push(
-        `Image is blurry (sharpness ${blurScore.toFixed(1)} < ${this.blurThreshold}). Please retake with a steadier camera and better focus.`
+        `Image appears blurry (sharpness ${blurScore.toFixed(1)} < ${rejectBlurThreshold.toFixed(1)}). Please retake with a steadier camera and better focus.`
       );
     }
 
@@ -55,6 +64,9 @@ export class ImageProcessingService {
       reasons,
       metrics: {
         blurScore,
+        contrastVariance,
+        adaptiveBlurThreshold,
+        rejectBlurThreshold,
         centerOffsetX: offsetX,
         centerOffsetY: offsetY,
       },
@@ -235,6 +247,27 @@ export class ImageProcessingService {
     if (count === 0) return 0;
     const mean = sum / count;
     return sumSquares / count - mean * mean;
+  }
+
+  private computeVariance(values: Buffer): number {
+    if (values.length === 0) return 0;
+
+    let sum = 0;
+    let sumSquares = 0;
+    for (let i = 0; i < values.length; i++) {
+      const value = values[i];
+      sum += value;
+      sumSquares += value * value;
+    }
+
+    const mean = sum / values.length;
+    return sumSquares / values.length - mean * mean;
+  }
+
+  private computeAdaptiveBlurThreshold(contrastVariance: number): number {
+    const safeContrast = Math.max(1, contrastVariance);
+    const scaled = this.baseBlurThreshold * Math.sqrt(safeContrast / this.contrastReferenceVariance);
+    return Math.min(this.baseBlurThreshold, Math.max(this.minAdaptiveBlurThreshold, scaled));
   }
 
   private computeForegroundCenterOffset(

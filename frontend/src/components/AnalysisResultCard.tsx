@@ -11,6 +11,13 @@ interface AnalysisResultCardProps {
 }
 
 export function AnalysisResultCard({ result, showDetailedResults = true, className }: AnalysisResultCardProps) {
+  const sourceLabel =
+    result.analysis_source === "resnet50+rules"
+      ? "ResNet50 ONNX + Rules"
+      : result.analysis_source === "backend"
+      ? "Backend"
+      : "Rules Fallback";
+
   return (
     <div className={cn("space-y-3", className)}>
       <Card className="rounded-2xl border-border/70 bg-card/95">
@@ -28,6 +35,10 @@ export function AnalysisResultCard({ result, showDetailedResults = true, classNa
             </div>
             <span className="font-display text-sm font-bold">{result.confidence_score}%</span>
           </div>
+          <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">Source: {sourceLabel}</p>
+          {result.model_confidence_score !== null && result.model_confidence_score !== undefined && (
+            <p className="mt-1 text-[11px] text-muted-foreground">Model confidence: {result.model_confidence_score}%</p>
+          )}
         </CardContent>
       </Card>
 

@@ -3,20 +3,13 @@ import { Camera, RotateCcw, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { assessCanvasQuality, assessFileQuality } from "@/lib/captureQuality";
 
 interface CameraCaptureProps {
   onCapture: (file: File) => void;
   className?: string;
   disabled?: boolean;
 }
-
-interface CaptureQualityResult {
-  accepted: boolean;
-  reasons: string[];
-}
-
-const CLIENT_BLUR_THRESHOLD = 110;
-const CLIENT_MAX_CENTER_OFFSET = 0.2;
 
 export function CameraCapture({ onCapture, className, disabled = false }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -27,6 +20,8 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
+  const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
+  const [uploadedFile, setUploadedFile] = useState<File | null>(null);
 
   const startCamera = useCallback(async () => {
     if (disabled) return;
@@ -128,6 +123,8 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     ctx.drawImage(video, 0, 0);
     const dataUrl = canvas.toDataURL("image/jpeg", 0.9);
     setCapturedImage(dataUrl);
+    setQualitySource("canvas");
+    setUploadedFile(null);
 
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
@@ -137,6 +134,14 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
 
   const confirmCapture = useCallback(() => {
     if (disabled) return;
+
+    if (qualitySource === "file") {
+      if (uploadedFile) {
+        // Uploaded files already pass assessFileQuality() before preview.
+        onCapture(uploadedFile);
+      }
+      return;
+    }
 
     if (!canvasRef.current) return;
 
@@ -156,12 +161,14 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
       "image/jpeg",
       0.9
     );
-  }, [disabled, onCapture]);
+  }, [disabled, onCapture, qualitySource, uploadedFile]);
 
   const retake = useCallback(() => {
     if (disabled) return;
 
     setCapturedImage(null);
+    setUploadedFile(null);
+    setQualitySource("canvas");
     void startCamera();
   }, [disabled, startCamera]);
 
@@ -178,7 +185,8 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
           return;
         }
 
-        onCapture(file);
+        setUploadedFile(file);
+        setQualitySource("file");
         const reader = new FileReader();
         reader.onload = (ev) => setCapturedImage(ev.target?.result as string);
         reader.readAsDataURL(file);
@@ -261,154 +269,4 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
       </div>
     </div>
   );
-}
-
-function assessCanvasQuality(canvas: HTMLCanvasElement): CaptureQualityResult {
-  const { data, width, height } = getDownscaledImageData(canvas);
-  const grayscale = toGrayscale(data, width, height);
-  const blurScore = computeLaplacianVariance(grayscale, width, height);
-  const centerOffset = computeForegroundCenterOffset(grayscale, width, height);
-
-  const reasons: string[] = [];
-  if (blurScore < CLIENT_BLUR_THRESHOLD) {
-    reasons.push("Image is blurry. Retake with better focus.");
-  }
-  if (
-    Math.abs(centerOffset.offsetX) > CLIENT_MAX_CENTER_OFFSET ||
-    Math.abs(centerOffset.offsetY) > CLIENT_MAX_CENTER_OFFSET
-  ) {
-    reasons.push("Image is off-center. Center the sample before using this photo.");
-  }
-
-  return { accepted: reasons.length === 0, reasons };
-}
-
-async function assessFileQuality(file: File): Promise<CaptureQualityResult> {
-  const imageBitmap = await createImageBitmap(file);
-  const canvas = document.createElement("canvas");
-  canvas.width = imageBitmap.width;
-  canvas.height = imageBitmap.height;
-  const ctx = canvas.getContext("2d");
-  if (!ctx) {
-    return { accepted: false, reasons: ["Unable to analyze selected image."] };
-  }
-
-  ctx.drawImage(imageBitmap, 0, 0);
-  imageBitmap.close();
-  return assessCanvasQuality(canvas);
-}
-
-function getDownscaledImageData(canvas: HTMLCanvasElement): {
-  data: Uint8ClampedArray;
-  width: number;
-  height: number;
-} {
-  const maxSide = 320;
-  const scale = Math.min(1, maxSide / Math.max(canvas.width, canvas.height));
-  const width = Math.max(1, Math.round(canvas.width * scale));
-  const height = Math.max(1, Math.round(canvas.height * scale));
-
-  const tempCanvas = document.createElement("canvas");
-  tempCanvas.width = width;
-  tempCanvas.height = height;
-  const tempCtx = tempCanvas.getContext("2d");
-  if (!tempCtx) {
-    return { data: new Uint8ClampedArray(), width: 0, height: 0 };
-  }
-
-  tempCtx.drawImage(canvas, 0, 0, width, height);
-  const imageData = tempCtx.getImageData(0, 0, width, height);
-  return { data: imageData.data, width, height };
-}
-
-function toGrayscale(data: Uint8ClampedArray, width: number, height: number): Uint8Array {
-  const grayscale = new Uint8Array(width * height);
-  for (let i = 0, p = 0; i < grayscale.length; i++, p += 4) {
-    grayscale[i] = Math.round(0.299 * data[p] + 0.587 * data[p + 1] + 0.114 * data[p + 2]);
-  }
-  return grayscale;
-}
-
-function computeLaplacianVariance(pixels: Uint8Array, width: number, height: number): number {
-  if (width < 3 || height < 3) return 0;
-  let sum = 0;
-  let sumSquares = 0;
-  let count = 0;
-
-  for (let y = 1; y < height - 1; y++) {
-    for (let x = 1; x < width - 1; x++) {
-      const idx = y * width + x;
-      const laplacian =
-        pixels[idx - 1] +
-        pixels[idx + 1] +
-        pixels[idx - width] +
-        pixels[idx + width] -
-        4 * pixels[idx];
-
-      sum += laplacian;
-      sumSquares += laplacian * laplacian;
-      count++;
-    }
-  }
-
-  if (count === 0) return 0;
-  const mean = sum / count;
-  return sumSquares / count - mean * mean;
-}
-
-function computeForegroundCenterOffset(
-  pixels: Uint8Array,
-  width: number,
-  height: number
-): { offsetX: number; offsetY: number } {
-  if (width === 0 || height === 0) return { offsetX: 0, offsetY: 0 };
-
-  const borderSamples: number[] = [];
-  for (let x = 0; x < width; x++) {
-    borderSamples.push(pixels[x]);
-    borderSamples.push(pixels[(height - 1) * width + x]);
-  }
-  for (let y = 1; y < height - 1; y++) {
-    borderSamples.push(pixels[y * width]);
-    borderSamples.push(pixels[y * width + (width - 1)]);
-  }
-
-  const backgroundLevel = median(borderSamples);
-  const deltaThreshold = 25;
-
-  let sumX = 0;
-  let sumY = 0;
-  let count = 0;
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const intensity = pixels[y * width + x];
-      if (Math.abs(intensity - backgroundLevel) > deltaThreshold) {
-        sumX += x;
-        sumY += y;
-        count++;
-      }
-    }
-  }
-
-  if (count === 0) return { offsetX: 1, offsetY: 1 };
-
-  const centroidX = sumX / count;
-  const centroidY = sumY / count;
-  const centerX = (width - 1) / 2;
-  const centerY = (height - 1) / 2;
-
-  return {
-    offsetX: (centroidX - centerX) / width,
-    offsetY: (centroidY - centerY) / height,
-  };
-}
-
-function median(values: number[]): number {
-  if (values.length === 0) return 0;
-  const sorted = [...values].sort((a, b) => a - b);
-  const middle = Math.floor(sorted.length / 2);
-  return sorted.length % 2 === 0
-    ? (sorted[middle - 1] + sorted[middle]) / 2
-    : sorted[middle];
 }

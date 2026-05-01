@@ -5,11 +5,10 @@
  *   1. Extract CIE L*a*b* color features   (Canvas API, pure JS)
  *   2. Compute GLCM texture features        (Canvas API, pure JS)
  *   3. Rule-based NMIS classification       (ported from backend)
- *   4. MobileNetV3-Small neural classifier  (TF.js, optional / lazy)
+ *   4. ResNet50 neural classifier           (ONNX Runtime Web, optional / lazy)
  *
- * Steps 1–3 are always available offline.
- * Step 4 augments the result when the model is loaded (cached in IndexedDB
- * after first network load).
+ * Steps 1-3 are always available offline.
+ * Step 4 augments the result when the model is loaded.
  *
  * Returns an AnalysisResult with the same shape as the backend endpoint so
  * callers (Index.tsx, OfflineSyncManager) need no changes.
@@ -19,18 +18,44 @@ import type { AnalysisResult } from "@/types/inspection";
 import { extractLabValues } from "./colorAnalysis";
 import { computeGLCMFeatures } from "./textureAnalysis";
 import { classify } from "./classificationEngine";
-import { classifyWithMobileNetV3, loadMobileNetV3, isModelReady } from "./mobileNetV3";
+import { classifyWithResNet50, loadResNet50Model, isModelReady, getLoadedModelPath } from "./resNet50Onnx";
 import { loadCalibration } from "./calibrationStore";
 
-export { prewarmModel } from "./mobileNetV3";
+export { prewarmModel } from "./resNet50Onnx";
 export { calibrateFromImage } from "./calibration";
 export { loadCalibration, saveCalibration, calibrationTTLMs } from "./calibrationStore";
+
+const MODEL_LOAD_WAIT_ONLINE_MS = 45000;
+const MODEL_LOAD_WAIT_OFFLINE_MS = 2500;
+const MODEL_LOAD_ATTEMPT_INTERVAL_MS = 1200;
+
+async function waitForModelLoad(timeoutMs: number): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+
+  while (Date.now() < deadline) {
+    const loaded = await loadResNet50Model({ forceRetry: true });
+    if (loaded || isModelReady()) {
+      return true;
+    }
+
+    const remainingMs = deadline - Date.now();
+    if (remainingMs <= 0) {
+      break;
+    }
+
+    await new Promise<void>((resolve) =>
+      window.setTimeout(resolve, Math.min(MODEL_LOAD_ATTEMPT_INTERVAL_MS, remainingMs))
+    );
+  }
+
+  return isModelReady();
+}
 
 /**
  * Run full offline analysis on the captured image file.
  *
- * The model is tried but never awaited in a blocking way — if it isn't
- * loaded yet the rule-based result is returned immediately.
+ * The model is given a short load window; if it is still unavailable,
+ * the rule-based result is returned.
  */
 export async function analyzeOffline(
   imageFile: File,
@@ -46,49 +71,59 @@ export async function analyzeOffline(
     computeGLCMFeatures(imageFile),
   ]);
 
-  // Try to use the MobileNetV3 model if it has already been loaded
+  // Try to use the ResNet50 model if it has already been loaded.
   let modelResult: { classification: AnalysisResult["classification"]; confidence: number } | null = null;
   if (isModelReady()) {
-    modelResult = await classifyWithMobileNetV3(imageFile);
+    modelResult = await classifyWithResNet50(imageFile);
   } else {
-    // Non-blocking background attempt — won't affect this call's result
-    // but primes the cache for the next offline session
-    void loadMobileNetV3();
+    // Give the model a short chance to load so first-use scans can benefit.
+    const loadWaitMs = navigator.onLine ? MODEL_LOAD_WAIT_ONLINE_MS : MODEL_LOAD_WAIT_OFFLINE_MS;
+    const loadedInTime = await waitForModelLoad(loadWaitMs);
+    if (loadedInTime && isModelReady()) {
+      modelResult = await classifyWithResNet50(imageFile);
+    }
   }
 
-  // Rule-based classification (always available)
+  if (navigator.onLine && !modelResult) {
+    throw new Error("ResNet50 model inference is required for online analysis.");
+  }
+
+  // Rule-based classification (always available).
   const ruleResult = classify(
     labValues,
     glcmFeatures,
     meatType,
-    modelResult ? "offline analysis — neural + rules" : "offline analysis — rules only"
+    modelResult ? "offline analysis - neural + rules" : "offline analysis - rules only"
   );
 
-  // ── Ensemble: combine neural + rule-based when both are available ──────────
+  // Ensemble: combine neural + rule-based when both are available.
   let finalClassification = ruleResult.classification;
   let finalConfidence = ruleResult.confidence_score;
 
   if (modelResult) {
     if (modelResult.classification === ruleResult.classification) {
-      // Agreement → boost confidence slightly
-      finalConfidence = Math.min(99, Math.round(0.55 * modelResult.confidence + 0.45 * finalConfidence));
+      // Agreement: confidence should be predominantly model-driven.
+      finalConfidence = Math.min(99, Math.round(0.85 * modelResult.confidence + 0.15 * finalConfidence));
     } else {
-      // Disagreement → use the higher-confidence source but dampen the score
+      // Disagreement: keep class selection conservative, but keep confidence
+      // mostly model-derived to avoid coarse rule-only buckets like 67%.
       if (modelResult.confidence > finalConfidence) {
         finalClassification = modelResult.classification;
-        finalConfidence = Math.round(modelResult.confidence * 0.75);
-      } else {
-        finalConfidence = Math.round(finalConfidence * 0.75);
       }
+      finalConfidence = Math.round(0.8 * modelResult.confidence + 0.2 * finalConfidence);
     }
   }
 
   return {
     classification: finalClassification,
     confidence_score: finalConfidence,
+    model_confidence_score: modelResult?.confidence ?? null,
+    rule_confidence_score: ruleResult.confidence_score,
     lab_values: labValues,
     glcm_features: glcmFeatures,
     flagged_deviations: ruleResult.flagged_deviations,
     explanation: ruleResult.explanation,
+    analysis_source: modelResult ? "resnet50+rules" : "rules-only",
+    model_path: getLoadedModelPath(),
   };
 }

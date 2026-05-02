@@ -16,17 +16,10 @@ import { queueScan } from "@/lib/offlineQueue";
 import { analyzeOffline } from "@/lib/offlineAnalysis";
 import { loadMobileNetV3, isModelReady as getMobileNetModelReady } from "@/lib/offlineAnalysis/mobileNetV3";
 
-const meatTypes: { value: MeatType; label: string }[] = [
-  { value: "pork", label: "Pork" },
-  { value: "beef", label: "Beef" },
-  { value: "chicken", label: "Chicken" },
-  { value: "fish", label: "Fish" },
-  { value: "other", label: "Other" },
-];
+const DEFAULT_MEAT_TYPE: MeatType = "pork";
 
 const InspectPage = () => {
   const { user, profile } = useAuth();
-  const [selectedMeat, setSelectedMeat] = useState<MeatType>("pork");
   const [capturedInput, setCapturedInput] = useState<CapturedImagePayload | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -117,7 +110,7 @@ const InspectPage = () => {
 
       try {
         // Always prefer local MobileNetV3 ONNX analysis first.
-        analysisResult = await analyzeOffline(capturedInput.file, selectedMeat, {
+        analysisResult = await analyzeOffline(capturedInput.file, DEFAULT_MEAT_TYPE, {
           guideBox: capturedInput.guideBox,
         });
 
@@ -137,7 +130,7 @@ const InspectPage = () => {
 
         const backendResult = await analyzeImage.mutateAsync({
           file: capturedInput.file,
-          meatType: selectedMeat,
+          meatType: DEFAULT_MEAT_TYPE,
         });
         analysisResult = {
           ...backendResult,
@@ -160,7 +153,7 @@ const InspectPage = () => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [capturedInput, selectedMeat, analyzeImage, isModelReady]);
+  }, [capturedInput, analyzeImage, isModelReady]);
 
   const handleSave = useCallback(async () => {
     if (!result || !capturedInput?.file || saveLockRef.current || saveStatus === "saved" || saveStatus === "queued") return;
@@ -181,7 +174,7 @@ const InspectPage = () => {
           imageData,
           imageType: capturedInput.file.type,
           imageName: capturedInput.file.name,
-          meatType: selectedMeat,
+          meatType: DEFAULT_MEAT_TYPE,
           queuedAt: new Date().toISOString(),
           userId: user.id,
           analysisResult: result,
@@ -210,7 +203,7 @@ const InspectPage = () => {
       await createInspection.mutateAsync({
         user_id: user.id,
         client_submission_id: submissionId,
-        meat_type: selectedMeat,
+        meat_type: DEFAULT_MEAT_TYPE,
         classification: result.classification,
         confidence_score: result.confidence_score,
         lab_l: result.lab_values.l,
@@ -232,7 +225,7 @@ const InspectPage = () => {
       console.error("Save error:", error);
       toast.error("Failed to save inspection");
     }
-  }, [result, selectedMeat, createInspection, user, capturedInput, clientSubmissionId, saveStatus]);
+  }, [result, createInspection, user, capturedInput, clientSubmissionId, saveStatus]);
 
   const handleReset = useCallback(() => {
     setCapturedInput(null);
@@ -262,7 +255,7 @@ const InspectPage = () => {
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Sample Type</p>
-              <p className="mt-1 font-display text-2xl font-semibold">{selectedMeat}</p>
+              <p className="mt-1 font-display text-2xl font-semibold capitalize">{DEFAULT_MEAT_TYPE}</p>
             </div>
             <div className="rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.16)] p-3">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Capture Status</p>
@@ -289,22 +282,6 @@ const InspectPage = () => {
             </div>
 
             <CalibrationBanner />
-
-            <div className="mb-3 grid grid-cols-2 gap-2 min-[420px]:grid-cols-3 sm:grid-cols-5">
-              {meatTypes.map(({ value, label }) => (
-                <button
-                  key={value}
-                  onClick={() => setSelectedMeat(value)}
-                  className={`rounded-xl border px-2 py-2 text-[11px] uppercase tracking-widest transition-colors ${
-                    selectedMeat === value
-                      ? "border-primary/40 bg-[hsl(var(--primary)/0.16)] text-foreground"
-                      : "border-border/60 bg-background/60 text-muted-foreground hover:text-foreground"
-                  }`}
-                >
-                  {label}
-                </button>
-              ))}
-            </div>
 
             <CameraCapture onCapture={handleCapture} disabled={saveStatus === "saving" || createInspection.isPending} />
 

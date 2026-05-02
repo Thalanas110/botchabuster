@@ -1,0 +1,28 @@
+{
+  "backbone": "MobileNetV3Small",
+  "preprocess_function_name": "mobilenet_v3.preprocess_input",
+  "input_size": [
+    224,
+    224
+  ],
+  "image_crop_mode": "center_crop",
+  "model_input_mode": "cnn_only",
+  "split_mode": "cross_rotation",
+  "split_name": "fold1",
+  "seed": 42,
+  "label_order": [
+    "fresh",
+    "not fresh",
+    "spoiled"
+  ],
+  "class_index_mapping": {
+    "fresh": 0,
+    "not fresh": 1,
+    "spoiled": 2
+  },
+  "macro_f1": 0.7259630078818272,
+  "accuracy": 0.7298969072164948,
+  "model_path": "e:\\Thesis Code\\training_outputs\\models\\meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.h5",
+  "tflite_path": "e:\\Thesis Code\\training_outputs\\models\\meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.tflite",
+  "timestamp": "2026-05-01T22:46:13.648135"
+}

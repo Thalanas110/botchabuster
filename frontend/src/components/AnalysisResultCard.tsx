@@ -15,7 +15,7 @@ export function AnalysisResultCard({ result, showDetailedResults = true, classNa
     result.analysis_source === "mobilenetv3+rules"
       ? "MobileNetV3 ONNX + Rules"
       : result.analysis_source === "resnet50+rules"
-      ? "ResNet50 ONNX + Rules (Legacy)"
+      ? "Legacy ONNX + Rules"
       : result.analysis_source === "backend"
       ? "Backend"
       : "Rules Fallback";

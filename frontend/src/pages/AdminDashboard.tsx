@@ -238,7 +238,8 @@ const AdminDashboard = () => {
       resetUserForm();
     } catch (err) {
       console.error("Failed to save user:", err);
-      toast.error("Failed to save user");
+      const message = err instanceof Error && err.message ? err.message : "Failed to save user";
+      toast.error(message);
     } finally {
       setIsSavingUser(false);
     }

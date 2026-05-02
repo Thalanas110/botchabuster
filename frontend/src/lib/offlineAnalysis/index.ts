@@ -19,7 +19,13 @@ import { extractLabValues } from "./colorAnalysis";
 import { computeGLCMFeatures } from "./textureAnalysis";
 import { classify } from "./classificationEngine";
 import { classifyWithMobileNetV3, loadMobileNetV3, isModelReady, getLoadedModelPath } from "./mobileNetV3";
-import { classifyRecommendation, computeFreshnessScore, type SquareGuideBox } from "./meatLensPipeline";
+import {
+  classifyRecommendation,
+  computeFreshnessScore,
+  createCroppedResizedImageFile,
+  DEFAULT_MEATLENS_INPUT_SIZE,
+  type SquareGuideBox,
+} from "./meatLensPipeline";
 import { loadCalibration } from "./calibrationStore";
 
 export { prewarmModel } from "./mobileNetV3";
@@ -29,6 +35,7 @@ export { loadCalibration, saveCalibration, calibrationTTLMs } from "./calibratio
 const MODEL_LOAD_WAIT_ONLINE_MS = 45_000;
 const MODEL_LOAD_WAIT_OFFLINE_MS = 2_500;
 const MODEL_LOAD_ATTEMPT_INTERVAL_MS = 1_200;
+const ANALYSIS_INPUT_SIZE = DEFAULT_MEATLENS_INPUT_SIZE;
 
 interface AnalyzeOfflineOptions {
   guideBox?: SquareGuideBox | null;
@@ -67,26 +74,34 @@ export async function analyzeOffline(
   meatType: string,
   options: AnalyzeOfflineOptions = {}
 ): Promise<AnalysisResult> {
+  // Deterministic preprocessing shared by camera and upload flows.
+  const processedImageFile = await createCroppedResizedImageFile(imageFile, {
+    guideBox: options.guideBox,
+    size: ANALYSIS_INPUT_SIZE,
+    mimeType: "image/jpeg",
+    quality: 0.92,
+  });
+
   // Load calibration from IndexedDB (null if none / expired)
   const calibration = await loadCalibration();
   const calibMatrix = calibration?.correctionMatrix;
 
   // Run color + texture extraction in parallel (both hit the Canvas, no conflict)
   const [labValues, glcmFeatures] = await Promise.all([
-    extractLabValues(imageFile, calibMatrix),
-    computeGLCMFeatures(imageFile),
+    extractLabValues(processedImageFile, calibMatrix),
+    computeGLCMFeatures(processedImageFile),
   ]);
 
   // Try to use the ONNX model if it has already been loaded.
   let modelResult = null;
   if (isModelReady()) {
-    modelResult = await classifyWithMobileNetV3(imageFile, { guideBox: options.guideBox });
+    modelResult = await classifyWithMobileNetV3(processedImageFile, { guideBox: null });
   } else {
     // Give the model a short chance to load so first-use scans can benefit.
     const loadWaitMs = navigator.onLine ? MODEL_LOAD_WAIT_ONLINE_MS : MODEL_LOAD_WAIT_OFFLINE_MS;
     const loadedInTime = await waitForModelLoad(loadWaitMs);
     if (loadedInTime && isModelReady()) {
-      modelResult = await classifyWithMobileNetV3(imageFile, { guideBox: options.guideBox });
+      modelResult = await classifyWithMobileNetV3(processedImageFile, { guideBox: null });
     }
   }
 

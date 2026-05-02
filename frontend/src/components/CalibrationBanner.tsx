@@ -122,6 +122,17 @@ export function CalibrationBanner() {
               <li>Avoid shadows or direct glare on the card</li>
               <li>Use the same lighting you'll use for scanning</li>
             </ul>
+            <p className="text-xs text-muted-foreground">
+              Need a printable card?{" "}
+              <a
+                href="/calibration-card.html"
+                target="_blank"
+                rel="noreferrer"
+                className="font-medium text-primary underline underline-offset-2"
+              >
+                Open calibration card
+              </a>
+            </p>
             <div className="flex flex-col gap-2 pt-2">
               <Button
                 disabled={isCalibrating}

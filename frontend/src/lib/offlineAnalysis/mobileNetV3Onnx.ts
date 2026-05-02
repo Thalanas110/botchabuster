@@ -16,14 +16,10 @@ import {
 } from "./meatLensPipeline";
 
 const ENV_MODEL_PATH = (
-  import.meta.env.VITE_ONNX_MODEL_PATH ??
-  import.meta.env.VITE_RESNET50_ONNX_PATH ??
-  ""
+  import.meta.env.VITE_ONNX_MODEL_PATH ?? ""
 ).trim();
 const ENV_CLASS_LABELS = (
-  import.meta.env.VITE_ONNX_CLASS_LABELS ??
-  import.meta.env.VITE_RESNET50_CLASS_LABELS ??
-  ""
+  import.meta.env.VITE_ONNX_CLASS_LABELS ?? ""
 ).trim();
 const ENV_METADATA_PATH = (import.meta.env.VITE_MODEL_METADATA_PATH ?? "").trim();
 const MOBILE_MODEL_CANDIDATES = [

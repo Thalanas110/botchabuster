@@ -4,7 +4,11 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { assessCanvasQuality, assessFileQuality } from "@/lib/captureQuality";
-import type { SquareGuideBox } from "@/lib/offlineAnalysis/meatLensPipeline";
+import {
+  createCroppedResizedImageFile,
+  DEFAULT_MEATLENS_INPUT_SIZE,
+  type SquareGuideBox,
+} from "@/lib/offlineAnalysis/meatLensPipeline";
 
 export interface CapturedImagePayload {
   file: File;
@@ -15,6 +19,16 @@ export interface CapturedImagePayload {
 const GUIDE_BOX_SIZE_RATIO = 0.72;
 const GUIDE_BOX_X_RATIO = (1 - GUIDE_BOX_SIZE_RATIO) / 2;
 const GUIDE_BOX_Y_RATIO = (1 - GUIDE_BOX_SIZE_RATIO) / 2;
+const PREVIEW_EXPORT_QUALITY = 0.92;
+
+function readBlobAsDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result ?? ""));
+    reader.onerror = () => reject(new Error("Failed to render model-input preview."));
+    reader.readAsDataURL(blob);
+  });
+}
 
 interface CameraCaptureProps {
   onCapture: (payload: CapturedImagePayload) => void;
@@ -25,6 +39,7 @@ interface CameraCaptureProps {
 export function CameraCapture({ onCapture, className, disabled = false }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const previewRequestIdRef = useRef(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
@@ -34,6 +49,36 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
   const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [captureGuideBox, setCaptureGuideBox] = useState<SquareGuideBox | null>(null);
+  const [modelInputPreview, setModelInputPreview] = useState<string | null>(null);
+  const [isPreparingModelPreview, setIsPreparingModelPreview] = useState(false);
+
+  const updateModelInputPreview = useCallback(async (sourceFile: File, guideBox: SquareGuideBox | null) => {
+    const requestId = ++previewRequestIdRef.current;
+    setIsPreparingModelPreview(true);
+
+    try {
+      const preprocessedFile = await createCroppedResizedImageFile(sourceFile, {
+        guideBox,
+        size: DEFAULT_MEATLENS_INPUT_SIZE,
+        mimeType: "image/jpeg",
+        quality: PREVIEW_EXPORT_QUALITY,
+      });
+      const previewDataUrl = await readBlobAsDataUrl(preprocessedFile);
+
+      if (previewRequestIdRef.current === requestId) {
+        setModelInputPreview(previewDataUrl);
+      }
+    } catch (previewError) {
+      console.warn("[Capture] Failed to prepare 224x224 model preview:", previewError);
+      if (previewRequestIdRef.current === requestId) {
+        setModelInputPreview(null);
+      }
+    } finally {
+      if (previewRequestIdRef.current === requestId) {
+        setIsPreparingModelPreview(false);
+      }
+    }
+  }, []);
 
   const startCamera = useCallback(async () => {
     if (disabled) return;
@@ -44,6 +89,9 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setCapturedImage(null);
     setIsVideoReady(false);
     setCaptureGuideBox(null);
+    setModelInputPreview(null);
+    setIsPreparingModelPreview(false);
+    previewRequestIdRef.current += 1;
 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -138,18 +186,32 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setCapturedImage(dataUrl);
     setQualitySource("canvas");
     setUploadedFile(null);
-    setCaptureGuideBox({
+    const guideBox: SquareGuideBox = {
       x: GUIDE_BOX_X_RATIO,
       y: GUIDE_BOX_Y_RATIO,
       size: GUIDE_BOX_SIZE_RATIO,
       normalized: true,
-    });
+    };
+    setCaptureGuideBox(guideBox);
+
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          return;
+        }
+
+        const previewSourceFile = new File([blob], `preview-${Date.now()}.jpg`, { type: "image/jpeg" });
+        void updateModelInputPreview(previewSourceFile, guideBox);
+      },
+      "image/jpeg",
+      PREVIEW_EXPORT_QUALITY
+    );
 
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
     setIsStreaming(false);
     setIsVideoReady(false);
-  }, [disabled, stream]);
+  }, [disabled, stream, updateModelInputPreview]);
 
   const confirmCapture = useCallback(() => {
     if (disabled) return;
@@ -196,6 +258,9 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setCapturedImage(null);
     setUploadedFile(null);
     setCaptureGuideBox(null);
+    setModelInputPreview(null);
+    setIsPreparingModelPreview(false);
+    previewRequestIdRef.current += 1;
     setQualitySource("canvas");
     void startCamera();
   }, [disabled, startCamera]);
@@ -216,19 +281,54 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
         setUploadedFile(file);
         setQualitySource("file");
         setCaptureGuideBox(null);
+        void updateModelInputPreview(file, null);
         const reader = new FileReader();
         reader.onload = (ev) => setCapturedImage(ev.target?.result as string);
         reader.readAsDataURL(file);
       }
     },
-    [disabled, onCapture]
+    [disabled, onCapture, updateModelInputPreview]
   );
 
   return (
     <div className={cn("flex flex-col items-center gap-4", className)}>
       <div className="relative w-full overflow-hidden rounded-2xl border border-border/70 bg-secondary aspect-[4/3] shadow-inner">
         {capturedImage ? (
-          <img src={capturedImage} alt="Captured" className="h-full w-full object-cover" />
+          <>
+            <img src={capturedImage} alt="Captured" className="h-full w-full object-cover" />
+            <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+              <div
+                className="rounded-2xl border-2 border-dashed border-primary/75 shadow-[0_0_0_9999px_rgba(0,0,0,0.14)]"
+                style={{
+                  width: `${GUIDE_BOX_SIZE_RATIO * 100}%`,
+                  aspectRatio: "1 / 1",
+                }}
+              />
+              <p className="absolute bottom-4 rounded-full border border-primary/40 bg-background/80 px-3 py-1 text-[10px] uppercase tracking-wide text-primary">
+                {qualitySource === "file" ? "Center crop -> 224x224 model input" : "Guide crop -> 224x224 model input"}
+              </p>
+            </div>
+
+            <div className="absolute right-3 top-3 rounded-lg border border-primary/30 bg-background/86 p-1.5 shadow-md">
+              <p className="mb-1 text-[9px] font-display uppercase tracking-widest text-muted-foreground">
+                Model Input
+              </p>
+              <div className="h-14 w-14 overflow-hidden rounded-md border border-border/70 bg-secondary">
+                {modelInputPreview ? (
+                  <img
+                    src={modelInputPreview}
+                    alt="224 by 224 model input preview"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-[9px] text-muted-foreground">
+                    {isPreparingModelPreview ? "..." : "N/A"}
+                  </div>
+                )}
+              </div>
+              <p className="mt-1 text-[9px] font-display uppercase tracking-widest text-muted-foreground">224x224</p>
+            </div>
+          </>
         ) : isStreaming ? (
           <>
             <video ref={videoRef} autoPlay playsInline muted className="h-full w-full object-cover" />

@@ -8,6 +8,7 @@ test("uploaded image can be confirmed without blur false-positive from canvas re
 
   await page.goto("/inspect");
   await uploadSamplePhoto(page);
+  await expect(page.getByText(/center crop -> 224x224 model input/i)).toBeVisible();
 
   await page.getByRole("button", { name: "Use Photo" }).click();
 

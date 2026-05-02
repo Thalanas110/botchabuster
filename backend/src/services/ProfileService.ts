@@ -220,15 +220,33 @@ export class ProfileService {
     let updatedProfile: Profile | null = null;
 
     if (Object.keys(profilePatch).length > 0) {
+      const updatePayload = { ...profilePatch, updated_at: new Date().toISOString() };
       const { data: profileData, error: profileError } = await (supabase
         .from("profiles") as any)
-        .update({ ...profilePatch, updated_at: new Date().toISOString() })
+        .update(updatePayload)
         .eq("id", userId)
         .select()
-        .single();
+        .maybeSingle();
 
       if (profileError) throw new Error(`Failed to update profile: ${profileError.message}`);
-      updatedProfile = profileData as Profile;
+
+      if (profileData) {
+        updatedProfile = profileData as Profile;
+      } else {
+        // Backward-compatible fallback for legacy rows that fail to return from
+        // UPDATE (e.g., missing profile row): ensure the profile exists via upsert.
+        const { data: upsertedProfileData, error: upsertProfileError } = await (supabase
+          .from("profiles") as any)
+          .upsert({
+            id: userId,
+            ...updatePayload,
+          }, { onConflict: "id" })
+          .select()
+          .single();
+
+        if (upsertProfileError) throw new Error(`Failed to update profile: ${upsertProfileError.message}`);
+        updatedProfile = upsertedProfileData as Profile;
+      }
     } else {
       updatedProfile = await this.getProfile(userId);
     }

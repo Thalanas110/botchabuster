@@ -13,6 +13,14 @@ export interface SquareCropRegion {
   side: number;
 }
 
+export interface PreprocessImageOptions {
+  guideBox?: SquareGuideBox | null;
+  size?: number;
+  mimeType?: string;
+  quality?: number;
+  fileName?: string;
+}
+
 export interface MeatLensModelMetadata {
   backbone?: string;
   preprocess_function_name?: string;
@@ -25,7 +33,7 @@ export type ModelPreprocessMode = "mobilenet_v3" | "efficientnet" | "resnet50" |
 
 export type FreshnessRecommendation = "Good for Consumption" | "Consume Immediately" | "Not Suitable";
 
-const DEFAULT_INPUT_SIZE = 224;
+export const DEFAULT_MEATLENS_INPUT_SIZE = 224;
 const RESNET_MEAN_BGR = {
   b: 103.939,
   g: 116.779,
@@ -42,6 +50,39 @@ function isFinitePositive(value: unknown): value is number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+function loadImageElement(file: File): Promise<HTMLImageElement> {
+  const url = URL.createObjectURL(file);
+
+  return new Promise((resolve, reject) => {
+    const image = new Image();
+    image.onload = () => {
+      URL.revokeObjectURL(url);
+      resolve(image);
+    };
+    image.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error("Could not decode source image."));
+    };
+    image.src = url;
+  });
+}
+
+function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: number): Promise<Blob> {
+  return new Promise((resolve, reject) => {
+    canvas.toBlob(
+      (blob) => {
+        if (!blob) {
+          reject(new Error("Failed to export preprocessed image."));
+          return;
+        }
+        resolve(blob);
+      },
+      mimeType,
+      quality
+    );
+  });
 }
 
 export function resolveSquareCropRegion(
@@ -82,6 +123,48 @@ export function resolveSquareCropRegion(
   return { left, top, side };
 }
 
+export async function createCroppedResizedImageFile(
+  imageFile: File,
+  options: PreprocessImageOptions = {}
+): Promise<File> {
+  const targetSize = Math.max(1, Math.round(options.size ?? DEFAULT_MEATLENS_INPUT_SIZE));
+  const mimeType = options.mimeType ?? "image/jpeg";
+  const quality = clamp(options.quality ?? 0.92, 0, 1);
+
+  const image = await loadImageElement(imageFile);
+  const crop = resolveSquareCropRegion(image.width, image.height, options.guideBox);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = targetSize;
+  canvas.height = targetSize;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Unable to create 2D canvas context.");
+  }
+
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
+  context.drawImage(
+    image,
+    crop.left,
+    crop.top,
+    crop.side,
+    crop.side,
+    0,
+    0,
+    targetSize,
+    targetSize
+  );
+
+  const blob = await canvasToBlob(canvas, mimeType, quality);
+  const fileName = options.fileName ?? imageFile.name.replace(/\.[^.]+$/, "") + ".jpg";
+  return new File([blob], fileName, {
+    type: mimeType,
+    lastModified: Date.now(),
+  });
+}
+
 export function resolveInputSize(metadata?: MeatLensModelMetadata | null): number {
   const rawSize = metadata?.input_size;
 
@@ -105,7 +188,7 @@ export function resolveInputSize(metadata?: MeatLensModelMetadata | null): numbe
     }
   }
 
-  return DEFAULT_INPUT_SIZE;
+  return DEFAULT_MEATLENS_INPUT_SIZE;
 }
 
 function normalizeMetadataHint(value: string): string {

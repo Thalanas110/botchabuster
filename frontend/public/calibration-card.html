@@ -1,0 +1,264 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MeatLens Calibration Card</title>
+  <style>
+    :root {
+      --paper: #f4f5f7;
+      --ink: #1f2937;
+      --muted: #6b7280;
+      --card-bg: #ffffff;
+      --cut: #e11d48;
+    }
+
+    * {
+      box-sizing: border-box;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--paper);
+      color: var(--ink);
+      font-family: "Segoe UI", Tahoma, sans-serif;
+      line-height: 1.4;
+      padding: 24px;
+    }
+
+    .wrap {
+      max-width: 900px;
+      margin: 0 auto;
+      background: #ffffff;
+      border: 1px solid #d1d5db;
+      border-radius: 14px;
+      padding: 24px;
+      box-shadow: 0 14px 36px rgba(15, 23, 42, 0.12);
+    }
+
+    h1 {
+      margin: 0 0 8px;
+      font-size: 26px;
+      letter-spacing: 0.02em;
+    }
+
+    .sub {
+      margin: 0;
+      color: var(--muted);
+      font-size: 14px;
+    }
+
+    .tips {
+      margin: 18px 0 20px;
+      padding: 12px 14px;
+      border-radius: 10px;
+      border: 1px solid #e5e7eb;
+      background: #f9fafb;
+      font-size: 13px;
+    }
+
+    .tips p {
+      margin: 4px 0;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 18px;
+    }
+
+    .card {
+      width: 90mm;
+      height: 60mm;
+      margin: 0 auto;
+      position: relative;
+      border: 1px dashed var(--cut);
+      border-radius: 5mm;
+      padding: 4mm;
+      background: #fdf2f8;
+    }
+
+    .panel {
+      width: 100%;
+      height: 100%;
+      background: var(--card-bg);
+      border: 1mm solid #111827;
+      border-radius: 3mm;
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      overflow: hidden;
+    }
+
+    .top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 2.4mm 3mm 1.6mm;
+      border-bottom: 0.4mm solid #111827;
+      font-size: 2.8mm;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .white-zone {
+      position: relative;
+      margin: 2.8mm;
+      border: 0.4mm solid #9ca3af;
+      background: #ffffff;
+      border-radius: 2mm;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      text-align: center;
+      color: #6b7280;
+      font-size: 2.8mm;
+      font-weight: 700;
+      letter-spacing: 0.03em;
+      text-transform: uppercase;
+    }
+
+    .white-zone::before,
+    .white-zone::after {
+      content: "";
+      position: absolute;
+      width: 6mm;
+      height: 6mm;
+      border: 0.55mm solid #111827;
+    }
+
+    .white-zone::before {
+      top: 1.2mm;
+      left: 1.2mm;
+      border-right: 0;
+      border-bottom: 0;
+    }
+
+    .white-zone::after {
+      right: 1.2mm;
+      bottom: 1.2mm;
+      border-left: 0;
+      border-top: 0;
+    }
+
+    .swatches {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      height: 6.6mm;
+      border-top: 0.4mm solid #111827;
+    }
+
+    .swatches span:nth-child(1) { background: #111111; }
+    .swatches span:nth-child(2) { background: #666666; }
+    .swatches span:nth-child(3) { background: #cfcfcf; }
+    .swatches span:nth-child(4) { background: #f3f3f3; }
+    .swatches span:nth-child(5) { background: #c84747; }
+    .swatches span:nth-child(6) { background: #3d73bb; }
+
+    .meta {
+      margin-top: 14px;
+      text-align: center;
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .ruler {
+      margin: 12px auto 0;
+      width: 50mm;
+      border-top: 1px solid #111827;
+      position: relative;
+      height: 10px;
+    }
+
+    .ruler::before,
+    .ruler::after {
+      content: "";
+      position: absolute;
+      top: -3px;
+      width: 1px;
+      height: 6px;
+      background: #111827;
+    }
+
+    .ruler::before { left: 0; }
+    .ruler::after { right: 0; }
+
+    .ruler-label {
+      text-align: center;
+      font-size: 11px;
+      color: var(--muted);
+    }
+
+    @media print {
+      @page {
+        size: A4;
+        margin: 8mm;
+      }
+
+      body {
+        padding: 0;
+        background: #ffffff;
+      }
+
+      .wrap {
+        max-width: none;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+        padding: 0;
+      }
+
+      .tips {
+        background: #ffffff;
+      }
+    }
+  </style>
+</head>
+<body>
+  <main class="wrap">
+    <h1>MeatLens Calibration Card</h1>
+    <p class="sub">Print at 100% scale. Do not fit to page. Cut along the dashed outline.</p>
+
+    <section class="tips">
+      <p><strong>How to use:</strong> Place one cut card near the pork while calibrating.</p>
+      <p>Keep the white center clearly visible and avoid glare or heavy shadows.</p>
+      <p>For best detection, the card should occupy around 5% to 25% of the camera frame.</p>
+    </section>
+
+    <section class="grid" aria-label="Printable calibration cards">
+      <article class="card" aria-label="Calibration card A">
+        <div class="panel">
+          <div class="top">
+            <span>MeatLens</span>
+            <span>Card A</span>
+          </div>
+          <div class="white-zone">White Reference</div>
+          <div class="swatches" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      </article>
+
+      <article class="card" aria-label="Calibration card B">
+        <div class="panel">
+          <div class="top">
+            <span>MeatLens</span>
+            <span>Card B</span>
+          </div>
+          <div class="white-zone">White Reference</div>
+          <div class="swatches" aria-hidden="true">
+            <span></span><span></span><span></span><span></span><span></span><span></span>
+          </div>
+        </div>
+      </article>
+    </section>
+
+    <div class="meta">Scale check line (should measure exactly 50 mm)</div>
+    <div class="ruler" aria-hidden="true"></div>
+    <div class="ruler-label">50 mm</div>
+  </main>
+</body>
+</html>

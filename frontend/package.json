@@ -7,7 +7,7 @@
     "sync:model": "node ../scripts/sync-onnx-model.mjs",
     "predev": "npm run sync:model",
     "dev": "vite",
-    "prebuild": "npm run sync:model",
+    "prebuild": "npm run sync:model && node ../scripts/check-netlify-preflight.mjs",
     "build": "vite build",
     "prebuild:dev": "npm run sync:model",
     "build:dev": "vite build --mode development",

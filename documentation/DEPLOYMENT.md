@@ -42,6 +42,29 @@ The root `netlify.toml` tells Netlify to:
    - `VITE_API_BASE_URL=https://YOUR-RENDER-SERVICE.onrender.com/api`
 6. Deploy the site.
 
+### Netlify Model Preflight (Required)
+
+Before deploying, make sure the MobileNetV3 ONNX artifacts exist in the repo:
+
+- `model/meatlens_mobilenetv3small_cnn_only.onnx` (or `model/meatlens_mobilenetv3small_cnn_only (1).onnx`)
+- metadata JSON with:
+  - `backbone: MobileNetV3Small`
+  - `preprocess_function_name: mobilenet_v3.preprocess_input`
+  - `label_order: ["fresh", "not fresh", "spoiled"]`
+
+During `npm run build`, `scripts/sync-onnx-model.mjs` copies these to stable public paths:
+
+- `frontend/public/model/meatlens_mobilenetv3small_cnn_only.onnx`
+- `frontend/public/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only.onnx`
+- `frontend/public/model/meatlens_best_model_metadata.json`
+- `frontend/public/models/mobilenetv3_meat/meatlens_best_model_metadata.json`
+
+Build now also runs `scripts/check-netlify-preflight.mjs` on Netlify to fail fast when:
+
+- `VITE_API_BASE_URL` is missing
+- MobileNetV3 ONNX file is missing
+- metadata JSON is missing
+
 ### Netlify Environment Variables
 
 Copy from `frontend/.env.example`:

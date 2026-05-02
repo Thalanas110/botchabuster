@@ -64,7 +64,7 @@ async function processScan(
 /**
  * Mount this component once inside <AuthProvider>.
  * - Drains the offline scan queue when the device comes back online.
- * - Pre-warms the ResNet50 ONNX model in the background for the next
+ * - Pre-warms the MobileNetV3 ONNX model in the background for the next
  *   offline session.
  */
 export function OfflineSyncManager() {
@@ -101,7 +101,7 @@ export function OfflineSyncManager() {
 
   useEffect(() => {
     void drainQueue();
-    // Start loading ResNet50 weights while online.
+    // Start loading MobileNetV3 weights while online.
     prewarmModel();
 
     const handleOnline = () => {

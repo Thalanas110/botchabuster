@@ -11,7 +11,7 @@ test("prevents saving the same analyzed record more than once", async ({ page })
   await page.goto("/inspect");
   await uploadSamplePhoto(page);
   await page.getByRole("button", { name: "Use Photo" }).click();
-  const analyzeButton = page.getByRole("button", { name: /Analyze Sample|Preparing ResNet50/i });
+  const analyzeButton = page.getByRole("button", { name: /Analyze Sample|Preparing MobileNetV3/i });
   await expect(analyzeButton).toBeVisible();
   await expect(analyzeButton).toBeEnabled({ timeout: 30_000 });
   await analyzeButton.click();

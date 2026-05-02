@@ -14,7 +14,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { uploadClient } from "@/integrations/api";
 import { queueScan } from "@/lib/offlineQueue";
 import { analyzeOffline } from "@/lib/offlineAnalysis";
-import { loadResNet50Model, isModelReady as getResNetModelReady } from "@/lib/offlineAnalysis/resNet50Onnx";
+import { loadMobileNetV3, isModelReady as getMobileNetModelReady } from "@/lib/offlineAnalysis/mobileNetV3";
 
 const meatTypes: { value: MeatType; label: string }[] = [
   { value: "pork", label: "Pork" },
@@ -30,7 +30,7 @@ const InspectPage = () => {
   const [capturedInput, setCapturedInput] = useState<CapturedImagePayload | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
-  const [isModelReady, setIsModelReady] = useState<boolean>(() => !navigator.onLine || getResNetModelReady());
+  const [isModelReady, setIsModelReady] = useState<boolean>(() => !navigator.onLine || getMobileNetModelReady());
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "queued">("idle");
   const [clientSubmissionId, setClientSubmissionId] = useState<string | null>(null);
   const saveLockRef = useRef(false);
@@ -52,16 +52,16 @@ const InspectPage = () => {
         return;
       }
 
-      if (getResNetModelReady()) {
+      if (getMobileNetModelReady()) {
         updateReadiness(true);
         return;
       }
 
       updateReadiness(false);
-      const loaded = await loadResNet50Model({ forceRetry: true });
+      const loaded = await loadMobileNetV3({ forceRetry: true });
       if (isCancelled) return;
 
-      if (loaded || getResNetModelReady()) {
+      if (loaded || getMobileNetModelReady()) {
         updateReadiness(true);
         return;
       }
@@ -107,7 +107,7 @@ const InspectPage = () => {
   const handleAnalyze = useCallback(async () => {
     if (!capturedInput?.file) return;
     if (navigator.onLine && !isModelReady) {
-      toast.info("Preparing ResNet50 model. Please wait a moment.");
+      toast.info("Preparing MobileNetV3 model. Please wait a moment.");
       return;
     }
 
@@ -116,17 +116,17 @@ const InspectPage = () => {
       let analysisResult: AnalysisResult;
 
       try {
-        // Always prefer local ResNet50 ONNX analysis first.
+        // Always prefer local MobileNetV3 ONNX analysis first.
         analysisResult = await analyzeOffline(capturedInput.file, selectedMeat, {
           guideBox: capturedInput.guideBox,
         });
 
-        if (analysisResult.analysis_source === "resnet50+rules") {
-          toast.success("ResNet50 ONNX analysis complete.");
+        if (analysisResult.analysis_source === "mobilenetv3+rules") {
+          toast.success("MobileNetV3 ONNX analysis complete.");
         } else {
           toast.warning(
             navigator.onLine
-              ? "ResNet50 model was not ready after waiting; ran rules-only fallback. Retry once more."
+              ? "MobileNetV3 model was not ready after waiting; ran rules-only fallback. Retry once more."
               : "Model unavailable offline; ran rules-only fallback."
           );
         }
@@ -321,12 +321,12 @@ const InspectPage = () => {
                       <Loader2 className="h-5 w-5 animate-spin" />
                       Analyzing sample...
                     </>
-                  ) : navigator.onLine && !isModelReady ? (
-                    <>
-                      <Loader2 className="h-5 w-5 animate-spin" />
-                      Preparing ResNet50...
-                    </>
-                  ) : (
+                ) : navigator.onLine && !isModelReady ? (
+                  <>
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                    Preparing MobileNetV3...
+                  </>
+                ) : (
                     <>
                       <ScanLine className="h-5 w-5" /> Analyze Sample
                     </>

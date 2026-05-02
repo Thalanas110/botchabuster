@@ -1,39 +1,19 @@
-This directory holds the TF.js GraphModel for MobileNetV3-Small fine-tuned on
-meat freshness classification (4 classes: fresh | acceptable | warning | spoiled).
+This directory holds the MobileNetV3 ONNX model and metadata used by app inference.
 
-Expected files after model export:
-  model.json        — topology + weight manifest
-  group1-shard*.bin — weight shards
+Expected files:
+  meatlens_mobilenetv3small_cnn_only.onnx
+  meatlens_mobilenetv3small_*_metadata.json
 
-How to add the model
-──────────────────────────────────────────────────────────────────────────────
-1. Train a MobileNetV3-Small head on your labelled meat freshness dataset.
+Expected metadata values:
+  backbone: MobileNetV3Small
+  preprocess_function_name: mobilenet_v3.preprocess_input
+  input_size: [224, 224]
+  image_crop_mode: center_crop
+  label_order: ["fresh", "not fresh", "spoiled"]
 
-2. Export from Python to TF.js GraphModel:
-
-   pip install tensorflowjs
-   tensorflowjs_converter \
-     --input_format=tf_saved_model \
-     --output_format=tfjs_graph_model \
-     --signature_name=serving_default \
-     --saved_model_tags=serve \
-     path/to/saved_model/ \
-     frontend/public/models/mobilenetv3_meat/
-
-   OR from a Keras .h5 model:
-
-   tensorflowjs_converter \
-     --input_format=keras \
-     path/to/model.h5 \
-     frontend/public/models/mobilenetv3_meat/
-
-3. Expected model input: [batch, 224, 224, 3] float32 normalized to [-1, 1]
-   Expected model output: [batch, 4] softmax probabilities
-   Class order: ["fresh", "acceptable", "warning", "spoiled"]
-
-4. Run `npm run build` — Workbox will automatically precache the model files
-   (see globPatterns in vite.config.ts).
-
-Until the model files are present, the app uses the rule-based classifier
-(Lab* color + GLCM texture against NMIS thresholds) which is always available
-and produces identical output format.
+Notes:
+- The app reads metadata dynamically at runtime and applies deterministic
+  preprocess only (no augmentation during inference).
+- `npm run build` runs `scripts/sync-onnx-model.mjs` which copies ONNX and
+  metadata into stable public paths consumed by the runtime.
+- If model load fails, the app falls back to rule-based classification.

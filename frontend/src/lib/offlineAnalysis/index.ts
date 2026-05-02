@@ -18,11 +18,11 @@ import type { AnalysisResult } from "@/types/inspection";
 import { extractLabValues } from "./colorAnalysis";
 import { computeGLCMFeatures } from "./textureAnalysis";
 import { classify } from "./classificationEngine";
-import { classifyWithResNet50, loadResNet50Model, isModelReady, getLoadedModelPath } from "./resNet50Onnx";
+import { classifyWithMobileNetV3, loadMobileNetV3, isModelReady, getLoadedModelPath } from "./mobileNetV3";
 import { classifyRecommendation, computeFreshnessScore, type SquareGuideBox } from "./meatLensPipeline";
 import { loadCalibration } from "./calibrationStore";
 
-export { prewarmModel } from "./resNet50Onnx";
+export { prewarmModel } from "./mobileNetV3";
 export { calibrateFromImage } from "./calibration";
 export { loadCalibration, saveCalibration, calibrationTTLMs } from "./calibrationStore";
 
@@ -38,7 +38,7 @@ async function waitForModelLoad(timeoutMs: number): Promise<boolean> {
   const deadline = Date.now() + timeoutMs;
 
   while (Date.now() < deadline) {
-    const loaded = await loadResNet50Model({ forceRetry: true });
+    const loaded = await loadMobileNetV3({ forceRetry: true });
     if (loaded || isModelReady()) {
       return true;
     }
@@ -80,13 +80,13 @@ export async function analyzeOffline(
   // Try to use the ONNX model if it has already been loaded.
   let modelResult = null;
   if (isModelReady()) {
-    modelResult = await classifyWithResNet50(imageFile, { guideBox: options.guideBox });
+    modelResult = await classifyWithMobileNetV3(imageFile, { guideBox: options.guideBox });
   } else {
     // Give the model a short chance to load so first-use scans can benefit.
     const loadWaitMs = navigator.onLine ? MODEL_LOAD_WAIT_ONLINE_MS : MODEL_LOAD_WAIT_OFFLINE_MS;
     const loadedInTime = await waitForModelLoad(loadWaitMs);
     if (loadedInTime && isModelReady()) {
-      modelResult = await classifyWithResNet50(imageFile, { guideBox: options.guideBox });
+      modelResult = await classifyWithMobileNetV3(imageFile, { guideBox: options.guideBox });
     }
   }
 
@@ -118,7 +118,7 @@ export async function analyzeOffline(
       glcm_features: glcmFeatures,
       flagged_deviations: ruleResult.flagged_deviations,
       explanation,
-      analysis_source: "resnet50+rules",
+      analysis_source: "mobilenetv3+rules",
       model_path: getLoadedModelPath(),
     };
   }

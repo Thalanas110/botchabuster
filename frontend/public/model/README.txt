@@ -1,20 +1,19 @@
-ResNet50 ONNX model placement
+MobileNetV3 ONNX model placement
 
 Put your trained ONNX file in one of these paths (first existing path is used):
 
-1. frontend/public/model/meatlens_resnet50_exp2.onnx   (recommended)
-2. frontend/public/model/resnet50.onnx
-3. frontend/public/model/model.onnx
-4. frontend/public/models/resnet50_meat/meatlens_resnet50_exp2.onnx
-5. frontend/public/models/resnet50_meat/model.onnx
+1. frontend/public/model/meatlens_mobilenetv3small_cnn_only.onnx   (recommended)
+2. frontend/public/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only.onnx
+3. frontend/public/models/mobilenetv3_meat/model.onnx
 
-Optional override:
-- Set VITE_RESNET50_ONNX_PATH to an absolute web path, e.g.
-  VITE_RESNET50_ONNX_PATH=/model/my_custom_resnet50.onnx
-- Set VITE_RESNET50_CLASS_LABELS to match model output order, e.g.
-  VITE_RESNET50_CLASS_LABELS=fresh,warning,spoiled
+Optional overrides:
+- Set VITE_ONNX_MODEL_PATH to an absolute web path, e.g.
+  VITE_ONNX_MODEL_PATH=/model/meatlens_mobilenetv3small_cnn_only.onnx
+- Set VITE_MODEL_METADATA_PATH to an absolute metadata path if needed.
+- Set VITE_ONNX_CLASS_LABELS only if your model output order differs.
 
 Notes:
-- The app uses ONNX Runtime Web with ResNet50 preprocessing (RGB->BGR plus
-  ImageNet channel mean subtraction).
+- Expected metadata label order is: fresh, not fresh, spoiled.
+- The app applies metadata-driven preprocessing and defaults to MobileNetV3
+  preprocessing if metadata cannot be loaded.
 - If no ONNX file is found, the app falls back to rule-based classification.

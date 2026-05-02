@@ -114,7 +114,7 @@ function normalizeMetadataHint(value: string): string {
 
 export function resolvePreprocessMode(
   metadata?: MeatLensModelMetadata | null,
-  fallbackMode: ModelPreprocessMode = "resnet50"
+  fallbackMode: ModelPreprocessMode = "mobilenet_v3"
 ): ModelPreprocessMode {
   const preprocessHint = metadata?.preprocess_function_name ?? "";
   const backboneHint = metadata?.backbone ?? "";

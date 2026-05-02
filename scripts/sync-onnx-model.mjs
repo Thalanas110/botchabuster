@@ -7,22 +7,50 @@ const scriptsDir = path.dirname(thisFile);
 const repoRoot = path.resolve(scriptsDir, "..");
 
 const sourceCandidates = [
-  path.join(repoRoot, "model", "resnet50.onnx"),
-  path.join(repoRoot, "model", "meatlens_resnet50_exp2.onnx"),
+  path.join(repoRoot, "model", "meatlens_mobilenetv3small_cnn_only.onnx"),
+  path.join(repoRoot, "model", "meatlens_mobilenetv3small_cnn_only (1).onnx"),
+  path.join(repoRoot, "model", "mobilenetv3.onnx"),
   path.join(repoRoot, "model", "model.onnx"),
 ];
 const metadataSourceCandidates = [
+  path.join(repoRoot, "model", "meatlens_mobilenetv3small_cnn_only_metadata.json"),
+  path.join(repoRoot, "model", "meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json"),
+  path.join(repoRoot, "model", "meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json"),
   path.join(repoRoot, "model", "meatlens_best_model_metadata.json"),
   path.join(repoRoot, "model", "best_model_metadata.json"),
+  path.join(
+    repoRoot,
+    "frontend",
+    "public",
+    "models",
+    "mobilenetv3_meat",
+    "meatlens_mobilenetv3small_cnn_only_metadata.json"
+  ),
+  path.join(
+    repoRoot,
+    "frontend",
+    "public",
+    "models",
+    "mobilenetv3_meat",
+    "meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json"
+  ),
+  path.join(
+    repoRoot,
+    "frontend",
+    "public",
+    "models",
+    "mobilenetv3_meat",
+    "meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json"
+  ),
 ];
 
 const targetPaths = [
-  path.join(repoRoot, "frontend", "public", "model", "meatlens_resnet50_exp2.onnx"),
-  path.join(repoRoot, "frontend", "public", "models", "resnet50_meat", "meatlens_resnet50_exp2.onnx"),
+  path.join(repoRoot, "frontend", "public", "model", "meatlens_mobilenetv3small_cnn_only.onnx"),
+  path.join(repoRoot, "frontend", "public", "models", "mobilenetv3_meat", "meatlens_mobilenetv3small_cnn_only.onnx"),
 ];
 const metadataTargetPaths = [
   path.join(repoRoot, "frontend", "public", "model", "meatlens_best_model_metadata.json"),
-  path.join(repoRoot, "frontend", "public", "models", "resnet50_meat", "meatlens_best_model_metadata.json"),
+  path.join(repoRoot, "frontend", "public", "models", "mobilenetv3_meat", "meatlens_best_model_metadata.json"),
 ];
 
 const ortDistDir = path.join(repoRoot, "node_modules", "onnxruntime-web", "dist");

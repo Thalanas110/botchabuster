@@ -61,7 +61,7 @@ export interface AnalysisResult {
   };
   flagged_deviations: string[];
   explanation: string;
-  analysis_source?: "resnet50+rules" | "rules-only" | "backend";
+  analysis_source?: "mobilenetv3+rules" | "resnet50+rules" | "rules-only" | "backend";
   model_path?: string | null;
 }
 

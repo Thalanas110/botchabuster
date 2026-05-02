@@ -5,6 +5,8 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
+import { TermsAndConditionsDialog } from "@/components/TermsAndConditionsDialog";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -12,12 +14,22 @@ const SignupPage = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [termsError, setTermsError] = useState("");
+  const [showTermsDialog, setShowTermsDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
   const navigate = useNavigate();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!acceptedTerms) {
+      setTermsError("Please accept the Terms and Conditions before creating an account.");
+      toast.error("Please accept the Terms and Conditions before creating an account.");
+      return;
+    }
+
+    setTermsError("");
     setLoading(true);
     try {
       await signUp(email, password, fullName);
@@ -75,6 +87,40 @@ const SignupPage = () => {
                 required
               />
             </div>
+            <div className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="accept-terms"
+                  checked={acceptedTerms}
+                  onCheckedChange={(checked) => {
+                    const accepted = Boolean(checked);
+                    setAcceptedTerms(accepted);
+                    if (accepted) {
+                      setTermsError("");
+                    }
+                  }}
+                  className="mt-0.5"
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="accept-terms" className="text-xs leading-relaxed">
+                    I agree to the MeatLens Terms and Conditions.
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-xs"
+                    onClick={() => setShowTermsDialog(true)}
+                  >
+                    View Terms and Conditions
+                  </Button>
+                </div>
+              </div>
+              {termsError ? (
+                <p role="alert" className="text-xs font-medium text-destructive">
+                  {termsError}
+                </p>
+              ) : null}
+            </div>
             <Button type="submit" className="w-full font-display uppercase tracking-wider" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Account"}
             </Button>
@@ -90,6 +136,7 @@ const SignupPage = () => {
           </div>
         </CardContent>
       </Card>
+      <TermsAndConditionsDialog open={showTermsDialog} onOpenChange={setShowTermsDialog} />
     </div>
   );
 };

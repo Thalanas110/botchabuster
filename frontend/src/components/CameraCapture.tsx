@@ -4,9 +4,20 @@ import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { assessCanvasQuality, assessFileQuality } from "@/lib/captureQuality";
+import type { SquareGuideBox } from "@/lib/offlineAnalysis/meatLensPipeline";
+
+export interface CapturedImagePayload {
+  file: File;
+  guideBox?: SquareGuideBox | null;
+  source: "camera" | "file";
+}
+
+const GUIDE_BOX_SIZE_RATIO = 0.72;
+const GUIDE_BOX_X_RATIO = (1 - GUIDE_BOX_SIZE_RATIO) / 2;
+const GUIDE_BOX_Y_RATIO = (1 - GUIDE_BOX_SIZE_RATIO) / 2;
 
 interface CameraCaptureProps {
-  onCapture: (file: File) => void;
+  onCapture: (payload: CapturedImagePayload) => void;
   className?: string;
   disabled?: boolean;
 }
@@ -22,6 +33,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
   const [isStarting, setIsStarting] = useState(false);
   const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
+  const [captureGuideBox, setCaptureGuideBox] = useState<SquareGuideBox | null>(null);
 
   const startCamera = useCallback(async () => {
     if (disabled) return;
@@ -31,6 +43,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setIsStreaming(true);
     setCapturedImage(null);
     setIsVideoReady(false);
+    setCaptureGuideBox(null);
 
     await new Promise((resolve) => setTimeout(resolve, 50));
 
@@ -125,6 +138,12 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setCapturedImage(dataUrl);
     setQualitySource("canvas");
     setUploadedFile(null);
+    setCaptureGuideBox({
+      x: GUIDE_BOX_X_RATIO,
+      y: GUIDE_BOX_Y_RATIO,
+      size: GUIDE_BOX_SIZE_RATIO,
+      normalized: true,
+    });
 
     stream?.getTracks().forEach((track) => track.stop());
     setStream(null);
@@ -138,7 +157,11 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     if (qualitySource === "file") {
       if (uploadedFile) {
         // Uploaded files already pass assessFileQuality() before preview.
-        onCapture(uploadedFile);
+        onCapture({
+          file: uploadedFile,
+          guideBox: null,
+          source: "file",
+        });
       }
       return;
     }
@@ -155,19 +178,24 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
       (blob) => {
         if (blob) {
           const file = new File([blob], `inspection-${Date.now()}.jpg`, { type: "image/jpeg" });
-          onCapture(file);
+          onCapture({
+            file,
+            guideBox: captureGuideBox,
+            source: "camera",
+          });
         }
       },
       "image/jpeg",
       0.9
     );
-  }, [disabled, onCapture, qualitySource, uploadedFile]);
+  }, [captureGuideBox, disabled, onCapture, qualitySource, uploadedFile]);
 
   const retake = useCallback(() => {
     if (disabled) return;
 
     setCapturedImage(null);
     setUploadedFile(null);
+    setCaptureGuideBox(null);
     setQualitySource("canvas");
     void startCamera();
   }, [disabled, startCamera]);
@@ -187,6 +215,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
 
         setUploadedFile(file);
         setQualitySource("file");
+        setCaptureGuideBox(null);
         const reader = new FileReader();
         reader.onload = (ev) => setCapturedImage(ev.target?.result as string);
         reader.readAsDataURL(file);
@@ -216,8 +245,16 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
             {isVideoReady && (
               <>
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div className="absolute bottom-4 right-4 h-10 w-16 rounded-md border-2 border-dashed border-primary/50" />
-                  <p className="absolute bottom-16 right-2 text-[10px] uppercase tracking-wide text-primary/70">Place color card here</p>
+                  <div
+                    className="rounded-2xl border-2 border-dashed border-primary/75 shadow-[0_0_0_9999px_rgba(0,0,0,0.14)]"
+                    style={{
+                      width: `${GUIDE_BOX_SIZE_RATIO * 100}%`,
+                      aspectRatio: "1 / 1",
+                    }}
+                  />
+                  <p className="absolute bottom-4 rounded-full border border-primary/40 bg-background/70 px-3 py-1 text-[10px] uppercase tracking-wide text-primary">
+                    Place pork inside guide box
+                  </p>
                 </div>
                 <div className="absolute inset-x-0 h-0.5 bg-primary/60 animate-scan-line" />
               </>

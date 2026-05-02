@@ -12,6 +12,7 @@ type FilterOption = "all" | FreshnessClassification;
 const filterOptions: { key: FilterOption; label: string }[] = [
   { key: "all", label: "All" },
   { key: "fresh", label: "Fresh" },
+  { key: "not fresh", label: "Not Fresh" },
   { key: "acceptable", label: "Acceptable" },
   { key: "warning", label: "Warning" },
   { key: "spoiled", label: "Spoiled" },
@@ -34,6 +35,7 @@ const HistoryPage = () => {
   const classificationCounts = useMemo(() => {
     const counts: Record<FreshnessClassification, number> = {
       fresh: 0,
+      "not fresh": 0,
       acceptable: 0,
       warning: 0,
       spoiled: 0,
@@ -224,7 +226,7 @@ const HistoryPage = () => {
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-3">
-                {(["fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => {
+                {(["fresh", "not fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => {
                   const count = classificationCounts[c] || 0;
                   const pct = totalInspections > 0 ? (count / totalInspections) * 100 : 0;
                   return (
@@ -238,6 +240,8 @@ const HistoryPage = () => {
                           className={`h-full rounded-full transition-all ${
                             c === "fresh"
                               ? "bg-fresh"
+                              : c === "not fresh"
+                                ? "bg-warning"
                               : c === "acceptable"
                                 ? "bg-acceptable"
                                 : c === "warning"

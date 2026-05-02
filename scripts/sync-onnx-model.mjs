@@ -11,10 +11,18 @@ const sourceCandidates = [
   path.join(repoRoot, "model", "meatlens_resnet50_exp2.onnx"),
   path.join(repoRoot, "model", "model.onnx"),
 ];
+const metadataSourceCandidates = [
+  path.join(repoRoot, "model", "meatlens_best_model_metadata.json"),
+  path.join(repoRoot, "model", "best_model_metadata.json"),
+];
 
 const targetPaths = [
   path.join(repoRoot, "frontend", "public", "model", "meatlens_resnet50_exp2.onnx"),
   path.join(repoRoot, "frontend", "public", "models", "resnet50_meat", "meatlens_resnet50_exp2.onnx"),
+];
+const metadataTargetPaths = [
+  path.join(repoRoot, "frontend", "public", "model", "meatlens_best_model_metadata.json"),
+  path.join(repoRoot, "frontend", "public", "models", "resnet50_meat", "meatlens_best_model_metadata.json"),
 ];
 
 const ortDistDir = path.join(repoRoot, "node_modules", "onnxruntime-web", "dist");
@@ -31,6 +39,7 @@ const ortRuntimeFiles = [
 ];
 
 const sourcePath = sourceCandidates.find((candidate) => existsSync(candidate));
+const metadataSourcePath = metadataSourceCandidates.find((candidate) => existsSync(candidate));
 
 if (!sourcePath) {
   console.info("[sync-onnx-model] No ONNX source found in model/. Skipping.");
@@ -59,6 +68,34 @@ for (const targetPath of targetPaths) {
   console.info(
     `[sync-onnx-model] Copied ${path.relative(repoRoot, sourcePath)} -> ${path.relative(repoRoot, targetPath)}`
   );
+}
+
+if (!metadataSourcePath) {
+  console.info("[sync-onnx-model] No metadata source found in model/. Skipping metadata sync.");
+} else {
+  const metadataSourceStat = statSync(metadataSourcePath);
+
+  for (const targetPath of metadataTargetPaths) {
+    mkdirSync(path.dirname(targetPath), { recursive: true });
+
+    let shouldCopy = true;
+    if (existsSync(targetPath)) {
+      const targetStat = statSync(targetPath);
+      shouldCopy =
+        targetStat.size !== metadataSourceStat.size ||
+        targetStat.mtimeMs < metadataSourceStat.mtimeMs;
+    }
+
+    if (!shouldCopy) {
+      console.info(`[sync-onnx-model] Up to date: ${path.relative(repoRoot, targetPath)}`);
+      continue;
+    }
+
+    copyFileSync(metadataSourcePath, targetPath);
+    console.info(
+      `[sync-onnx-model] Copied ${path.relative(repoRoot, metadataSourcePath)} -> ${path.relative(repoRoot, targetPath)}`
+    );
+  }
 }
 
 mkdirSync(ortPublicDir, { recursive: true });

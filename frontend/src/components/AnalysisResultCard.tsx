@@ -36,6 +36,12 @@ export function AnalysisResultCard({ result, showDetailedResults = true, classNa
             <span className="font-display text-sm font-bold">{result.confidence_score}%</span>
           </div>
           <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">Source: {sourceLabel}</p>
+          {typeof result.freshness_score === "number" && (
+            <p className="mt-1 text-[11px] text-muted-foreground">Freshness score: {Math.round(result.freshness_score)}/100</p>
+          )}
+          {result.recommendation && (
+            <p className="mt-1 text-[11px] text-muted-foreground">Recommendation: {result.recommendation}</p>
+          )}
           {result.model_confidence_score !== null && result.model_confidence_score !== undefined && (
             <p className="mt-1 text-[11px] text-muted-foreground">Model confidence: {result.model_confidence_score}%</p>
           )}

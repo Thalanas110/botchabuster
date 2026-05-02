@@ -18,6 +18,7 @@ export function InspectionListItem({ inspection, onClick, className }: Inspectio
 
   const surfaceByClass = {
     fresh: "bg-[hsl(var(--fresh)/0.14)]",
+    "not fresh": "bg-[hsl(var(--warning)/0.14)]",
     acceptable: "bg-[hsl(var(--acceptable)/0.14)]",
     warning: "bg-[hsl(var(--warning)/0.14)]",
     spoiled: "bg-[hsl(var(--spoiled)/0.14)]",

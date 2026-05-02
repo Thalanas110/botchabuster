@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from "react";
-import { CameraCapture } from "@/components/CameraCapture";
+import { CameraCapture, type CapturedImagePayload } from "@/components/CameraCapture";
 import { CalibrationBanner } from "@/components/CalibrationBanner";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { Button } from "@/components/ui/button";
@@ -27,7 +27,7 @@ const meatTypes: { value: MeatType; label: string }[] = [
 const InspectPage = () => {
   const { user, profile } = useAuth();
   const [selectedMeat, setSelectedMeat] = useState<MeatType>("pork");
-  const [capturedFile, setCapturedFile] = useState<File | null>(null);
+  const [capturedInput, setCapturedInput] = useState<CapturedImagePayload | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isModelReady, setIsModelReady] = useState<boolean>(() => !navigator.onLine || getResNetModelReady());
@@ -93,10 +93,10 @@ const InspectPage = () => {
     };
   }, []);
 
-  const handleCapture = useCallback((file: File) => {
+  const handleCapture = useCallback((capture: CapturedImagePayload) => {
     if (saveStatus === "saving") return;
 
-    setCapturedFile(file);
+    setCapturedInput(capture);
     setResult(null);
     setSaveStatus("idle");
     saveLockRef.current = false;
@@ -105,7 +105,7 @@ const InspectPage = () => {
 
 
   const handleAnalyze = useCallback(async () => {
-    if (!capturedFile) return;
+    if (!capturedInput?.file) return;
     if (navigator.onLine && !isModelReady) {
       toast.info("Preparing ResNet50 model. Please wait a moment.");
       return;
@@ -117,7 +117,9 @@ const InspectPage = () => {
 
       try {
         // Always prefer local ResNet50 ONNX analysis first.
-        analysisResult = await analyzeOffline(capturedFile, selectedMeat);
+        analysisResult = await analyzeOffline(capturedInput.file, selectedMeat, {
+          guideBox: capturedInput.guideBox,
+        });
 
         if (analysisResult.analysis_source === "resnet50+rules") {
           toast.success("ResNet50 ONNX analysis complete.");
@@ -134,7 +136,7 @@ const InspectPage = () => {
         }
 
         const backendResult = await analyzeImage.mutateAsync({
-          file: capturedFile,
+          file: capturedInput.file,
           meatType: selectedMeat,
         });
         analysisResult = {
@@ -158,10 +160,10 @@ const InspectPage = () => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [capturedFile, selectedMeat, analyzeImage, isModelReady]);
+  }, [capturedInput, selectedMeat, analyzeImage, isModelReady]);
 
   const handleSave = useCallback(async () => {
-    if (!result || !capturedFile || saveLockRef.current || saveStatus === "saved" || saveStatus === "queued") return;
+    if (!result || !capturedInput?.file || saveLockRef.current || saveStatus === "saved" || saveStatus === "queued") return;
     if (!user) {
       toast.error("Please sign in to save inspections");
       return;
@@ -173,12 +175,12 @@ const InspectPage = () => {
     // ── Offline path: queue with already-computed result ─────────────────────
     if (!navigator.onLine) {
       try {
-        const imageData = await capturedFile.arrayBuffer();
+        const imageData = await capturedInput.file.arrayBuffer();
         await queueScan({
           id: submissionId,
           imageData,
-          imageType: capturedFile.type,
-          imageName: capturedFile.name,
+          imageType: capturedInput.file.type,
+          imageName: capturedInput.file.name,
           meatType: selectedMeat,
           queuedAt: new Date().toISOString(),
           userId: user.id,
@@ -199,7 +201,7 @@ const InspectPage = () => {
     try {
       let imageUrl: string | null = null;
       try {
-        imageUrl = await uploadClient.uploadInspectionImage(capturedFile, user.id);
+        imageUrl = await uploadClient.uploadInspectionImage(capturedInput.file, user.id);
       } catch (uploadError) {
         console.error("Image upload failed:", uploadError);
         toast.warning("Image upload failed, saving without image");
@@ -230,10 +232,10 @@ const InspectPage = () => {
       console.error("Save error:", error);
       toast.error("Failed to save inspection");
     }
-  }, [result, selectedMeat, createInspection, user, capturedFile, clientSubmissionId, saveStatus]);
+  }, [result, selectedMeat, createInspection, user, capturedInput, clientSubmissionId, saveStatus]);
 
   const handleReset = useCallback(() => {
-    setCapturedFile(null);
+    setCapturedInput(null);
     setResult(null);
     setSaveStatus("idle");
     saveLockRef.current = false;
@@ -264,7 +266,7 @@ const InspectPage = () => {
             </div>
             <div className="rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.16)] p-3">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Capture Status</p>
-              <p className="mt-1 font-display text-2xl font-semibold">{capturedFile ? "Ready" : "Waiting"}</p>
+              <p className="mt-1 font-display text-2xl font-semibold">{capturedInput ? "Ready" : "Waiting"}</p>
             </div>
             <div className="rounded-2xl border border-border/70 bg-background/65 p-3">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Analysis Status</p>
@@ -306,7 +308,7 @@ const InspectPage = () => {
 
             <CameraCapture onCapture={handleCapture} disabled={saveStatus === "saving" || createInspection.isPending} />
 
-            {capturedFile && !result && (
+            {capturedInput && !result && (
               <div className="mt-4">
                 <Button
                   onClick={handleAnalyze}

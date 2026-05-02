@@ -2,7 +2,7 @@ export interface Inspection {
   id: string;
   user_id: string;
   meat_type: string;
-  classification: "fresh" | "acceptable" | "warning" | "spoiled";
+  classification: "fresh" | "not fresh" | "spoiled" | "acceptable" | "warning";
   confidence_score: number;
   lab_l: number;
   lab_a: number;
@@ -24,7 +24,7 @@ export interface Inspection {
 export interface InspectionInsert {
   user_id: string;
   meat_type: string;
-  classification: "fresh" | "acceptable" | "warning" | "spoiled";
+  classification: "fresh" | "not fresh" | "spoiled" | "acceptable" | "warning";
   confidence_score: number;
   lab_l: number;
   lab_a: number;

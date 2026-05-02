@@ -1,4 +1,4 @@
-export type FreshnessClassification = 'fresh' | 'acceptable' | 'warning' | 'spoiled';
+export type FreshnessClassification = 'fresh' | 'not fresh' | 'spoiled' | 'acceptable' | 'warning';
 export type MeatType = 'pork' | 'beef' | 'chicken' | 'fish' | 'other';
 
 export interface Inspection {
@@ -48,6 +48,10 @@ export interface AnalysisResult {
   confidence_score: number;
   model_confidence_score?: number | null;
   rule_confidence_score?: number | null;
+  freshness_score?: number | null;
+  recommendation?: "Good for Consumption" | "Consume Immediately" | "Not Suitable" | null;
+  probabilities?: Partial<Record<FreshnessClassification, number>>;
+  label_order?: FreshnessClassification[];
   lab_values: { l: number; a: number; b: number };
   glcm_features: {
     contrast: number;

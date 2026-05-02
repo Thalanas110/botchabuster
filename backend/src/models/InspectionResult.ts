@@ -1,5 +1,5 @@
 export interface InspectionResultData {
-  classification: "fresh" | "acceptable" | "warning" | "spoiled";
+  classification: "fresh" | "not fresh" | "spoiled" | "acceptable" | "warning";
   confidence_score: number;
   lab_values: { l: number; a: number; b: number };
   glcm_features: {

@@ -84,6 +84,10 @@ test("renders the expanded business analytics section with fallback labels", asy
 
   await page.goto("/admin");
   await expect(page).toHaveURL(/\/admin$/);
+  await expect(page.getByText(/Generate Reports/i)).toBeVisible();
+  await expect(page.getByRole("button", { name: /PDF Summary/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /CSV Detail/i })).toBeVisible();
+  await expect(page.getByRole("button", { name: /JSON Snapshot/i })).toBeVisible();
   await expect(page.getByText(/Business Analytics/i)).toBeVisible();
   await expect.poll(() => inspectionUrl).not.toBe("");
   expect(inspectionUrl).toContain("limit=200");
@@ -117,6 +121,8 @@ test.describe("mobile viewport", () => {
 
     await page.goto("/admin");
     await expect(page).toHaveURL(/\/admin$/);
+    await expect(page.getByText(/Generate Reports/i)).toBeVisible();
+    await expect(page.getByRole("button", { name: /PDF Summary/i })).toBeVisible();
     await expect(page.getByText(/Business Analytics/i)).toBeVisible();
     await expect(page.getByText(/Top inspectors by inspection volume/i)).toBeVisible();
     await expect(page.getByText(/Top locations by inspection count/i)).toBeVisible();

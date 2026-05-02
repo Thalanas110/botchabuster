@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { TermsAndConditionsDialog } from "@/components/TermsAndConditionsDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { uploadClient } from "@/integrations/api/UploadClient";
@@ -39,6 +40,7 @@ const ProfilePage = () => {
   const [isSavingInspectPreference, setIsSavingInspectPreference] = useState(false);
   const [isLightMode, setIsLightMode] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
+  const [showTermsDialog, setShowTermsDialog] = useState(false);
 
   const initials = useMemo(() => {
     const source = fullName.trim() || user?.email || "User";
@@ -329,6 +331,22 @@ const ProfilePage = () => {
                 </div>
               </div>
             </section>
+
+            <section className="rounded-3xl border border-border/70 bg-card/90 p-4">
+              <h3 className="font-display text-lg font-semibold">Terms and Conditions Reminder</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                MeatLens is an AI-assisted support tool. Final inspection decisions must still follow professional
+                standards and official NMIS or LGU protocols.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 h-10 rounded-xl border-border/80 text-xs uppercase tracking-wider"
+                onClick={() => setShowTermsDialog(true)}
+              >
+                View Terms and Conditions
+              </Button>
+            </section>
           </div>
 
           <div className="space-y-4">
@@ -427,6 +445,7 @@ const ProfilePage = () => {
         confirmLabel="Sign Out"
         onConfirm={handleSignOut}
       />
+      <TermsAndConditionsDialog open={showTermsDialog} onOpenChange={setShowTermsDialog} />
     </div>
   );
 };

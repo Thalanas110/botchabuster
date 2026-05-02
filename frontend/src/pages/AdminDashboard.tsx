@@ -34,7 +34,7 @@ import {
   Pencil,
 } from "lucide-react";
 import { toast } from "sonner";
-import { format, subDays, startOfDay, isAfter } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, isAfter } from "date-fns";
 import { ChartContainer, ChartTooltip, ChartTooltipContent } from "@/components/ui/chart";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, PieChart, Pie, Cell, AreaChart, Area } from "recharts";
 
@@ -53,6 +53,7 @@ type ManagedUserForm = {
 
 const classColors: Record<FreshnessClassification, string> = {
   fresh: "bg-fresh",
+  "not fresh": "bg-warning",
   acceptable: "bg-acceptable",
   warning: "bg-warning",
   spoiled: "bg-spoiled",
@@ -60,6 +61,7 @@ const classColors: Record<FreshnessClassification, string> = {
 
 const PIE_COLORS: Record<FreshnessClassification, string> = {
   fresh: "hsl(142, 71%, 45%)",
+  "not fresh": "hsl(38, 92%, 50%)",
   acceptable: "hsl(48, 96%, 53%)",
   warning: "hsl(25, 95%, 53%)",
   spoiled: "hsl(0, 84%, 60%)",
@@ -75,8 +77,10 @@ const MEAT_TYPE_LABELS = {
 
 const ANALYTICS_DAYS = 14;
 const MAX_ANALYTICS_ITEMS = 6;
+const REPORT_DEFAULT_RANGE_DAYS = 30;
 const UNKNOWN_INSPECTOR_LABEL = "Unknown Inspector";
 const UNSPECIFIED_LOCATION_LABEL = "Unspecified";
+const REPORT_CLASSIFICATIONS: FreshnessClassification[] = ["fresh", "not fresh", "acceptable", "warning", "spoiled"];
 
 const tabs = [
   { key: "overview" as const, label: "Overview", icon: LayoutGrid },
@@ -92,6 +96,22 @@ const getLocationLabel = (inspectionLocation: string | null, profile?: Profile) 
   inspectionLocation?.trim() || profile?.location?.trim() || UNSPECIFIED_LOCATION_LABEL;
 
 const truncateChartLabel = (value: string) => (value.length > 12 ? `${value.slice(0, 12)}...` : value);
+
+const escapeHtml = (value: string): string =>
+  value
+    .replaceAll("&", "&amp;")
+    .replaceAll("<", "&lt;")
+    .replaceAll(">", "&gt;")
+    .replaceAll('"', "&quot;")
+    .replaceAll("'", "&#39;");
+
+const toCsvValue = (value: unknown): string => {
+  const raw = value == null ? "" : String(value);
+  if (raw.includes(",") || raw.includes("\n") || raw.includes('"')) {
+    return `"${raw.replaceAll('"', '""')}"`;
+  }
+  return raw;
+};
 
 const AdminDashboard = () => {
   const { user } = useAuth();
@@ -111,6 +131,8 @@ const AdminDashboard = () => {
   const [inspectorFilter, setInspectorFilter] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [reportStartDate, setReportStartDate] = useState(() => format(subDays(new Date(), REPORT_DEFAULT_RANGE_DAYS - 1), "yyyy-MM-dd"));
+  const [reportEndDate, setReportEndDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [userForm, setUserForm] = useState<ManagedUserForm>({
     full_name: "",
     email: "",
@@ -261,7 +283,7 @@ const AdminDashboard = () => {
   }, [profiles]);
 
   const pieData = useMemo(() => {
-    return (["fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => ({
+    return (["fresh", "not fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => ({
       name: c.charAt(0).toUpperCase() + c.slice(1),
       value: classificationCounts[c] || 0,
       fill: PIE_COLORS[c],
@@ -276,6 +298,7 @@ const AdminDashboard = () => {
         count: number;
         totalConfidence: number;
         fresh: number;
+        notFresh: number;
         acceptable: number;
         warning: number;
         spoiled: number;
@@ -292,6 +315,7 @@ const AdminDashboard = () => {
         count: 0,
         totalConfidence: 0,
         fresh: 0,
+        notFresh: 0,
         acceptable: 0,
         warning: 0,
         spoiled: 0,
@@ -309,6 +333,9 @@ const AdminDashboard = () => {
       switch (inspection.classification) {
         case "fresh":
           bucket.fresh += 1;
+          break;
+        case "not fresh":
+          bucket.notFresh += 1;
           break;
         case "acceptable":
           bucket.acceptable += 1;
@@ -328,6 +355,7 @@ const AdminDashboard = () => {
         date: bucket.date,
         count: bucket.count,
         fresh: bucket.fresh,
+        notFresh: bucket.notFresh,
         acceptable: bucket.acceptable,
         warning: bucket.warning,
         spoiled: bucket.spoiled,
@@ -425,9 +453,10 @@ const AdminDashboard = () => {
   }, [dailyAnalytics]);
 
   const freshnessMixData = useMemo(() => {
-    return dailyAnalytics.map(({ date, fresh, acceptable, warning, spoiled }) => ({
+    return dailyAnalytics.map(({ date, fresh, notFresh, acceptable, warning, spoiled }) => ({
       date,
       fresh,
+      notFresh,
       acceptable,
       warning,
       spoiled,
@@ -443,6 +472,105 @@ const AdminDashboard = () => {
       return label.includes(query);
     });
   }, [inspections, inspectorFilter, profileById]);
+
+  const reportDateRangeInvalid = reportStartDate > reportEndDate;
+
+  const reportFilteredInspections = useMemo(() => {
+    if (reportDateRangeInvalid) return [];
+
+    const startDate = startOfDay(new Date(`${reportStartDate}T00:00:00`));
+    const endDate = endOfDay(new Date(`${reportEndDate}T00:00:00`));
+
+    return inspections.filter((inspection) => {
+      const inspectionDate = new Date(inspection.created_at);
+      return inspectionDate >= startDate && inspectionDate <= endDate;
+    });
+  }, [inspections, reportDateRangeInvalid, reportStartDate, reportEndDate]);
+
+  const reportClassCounts = useMemo(() => {
+    const counts: Record<FreshnessClassification, number> = {
+      fresh: 0,
+      "not fresh": 0,
+      acceptable: 0,
+      warning: 0,
+      spoiled: 0,
+    };
+
+    reportFilteredInspections.forEach((inspection) => {
+      counts[inspection.classification] += 1;
+    });
+
+    return counts;
+  }, [reportFilteredInspections]);
+
+  const reportRows = useMemo(() => {
+    return reportFilteredInspections.map((inspection) => {
+      const profile = inspection.user_id ? profileById.get(inspection.user_id) : undefined;
+
+      return {
+        id: inspection.id,
+        createdAt: inspection.created_at,
+        inspector: getInspectorLabel(profile),
+        location: getLocationLabel(inspection.location, profile),
+        meatType: inspection.meat_type,
+        classification: inspection.classification,
+        confidenceScore: inspection.confidence_score,
+        labL: inspection.lab_l,
+        labA: inspection.lab_a,
+        labB: inspection.lab_b,
+        glcmContrast: inspection.glcm_contrast,
+        glcmCorrelation: inspection.glcm_correlation,
+        glcmEnergy: inspection.glcm_energy,
+        glcmHomogeneity: inspection.glcm_homogeneity,
+      };
+    });
+  }, [reportFilteredInspections, profileById]);
+
+  const reportSummary = useMemo(() => {
+    if (reportFilteredInspections.length === 0) {
+      return { total: 0, averageConfidence: 0, spoiledRate: 0 };
+    }
+
+    const total = reportFilteredInspections.length;
+    const averageConfidence = Math.round(
+      reportFilteredInspections.reduce((sum, inspection) => sum + inspection.confidence_score, 0) / total,
+    );
+    const spoiledRate = Math.round((reportClassCounts.spoiled / total) * 100);
+
+    return { total, averageConfidence, spoiledRate };
+  }, [reportFilteredInspections, reportClassCounts.spoiled]);
+
+  const reportTopInspectors = useMemo(() => {
+    const aggregates = new Map<string, { count: number; totalConfidence: number }>();
+
+    reportRows.forEach((row) => {
+      const current = aggregates.get(row.inspector) ?? { count: 0, totalConfidence: 0 };
+      current.count += 1;
+      current.totalConfidence += row.confidenceScore;
+      aggregates.set(row.inspector, current);
+    });
+
+    return Array.from(aggregates.entries())
+      .map(([inspector, value]) => ({
+        inspector,
+        count: value.count,
+        averageConfidence: Math.round(value.totalConfidence / value.count),
+      }))
+      .sort((left, right) => right.count - left.count || right.averageConfidence - left.averageConfidence || left.inspector.localeCompare(right.inspector))
+      .slice(0, 8);
+  }, [reportRows]);
+
+  const reportByMeatType = useMemo(() => {
+    const aggregates = new Map<string, number>();
+
+    reportRows.forEach((row) => {
+      aggregates.set(row.meatType, (aggregates.get(row.meatType) ?? 0) + 1);
+    });
+
+    return Array.from(aggregates.entries())
+      .map(([meatType, count]) => ({ meatType, count }))
+      .sort((left, right) => right.count - left.count || left.meatType.localeCompare(right.meatType));
+  }, [reportRows]);
 
   const avgConfidence = useMemo(() => {
     if (inspections.length === 0) return 0;
@@ -467,6 +595,7 @@ const AdminDashboard = () => {
   const chartConfig = {
     count: { label: "Inspections", color: "hsl(var(--primary))" },
     fresh: { label: "Fresh", color: PIE_COLORS.fresh },
+    notFresh: { label: "Not Fresh", color: PIE_COLORS["not fresh"] },
     acceptable: { label: "Acceptable", color: PIE_COLORS.acceptable },
     warning: { label: "Warning", color: PIE_COLORS.warning },
     spoiled: { label: "Spoiled", color: PIE_COLORS.spoiled },
@@ -510,31 +639,266 @@ const AdminDashboard = () => {
     }
   };
 
-  const handleExportCSV = () => {
-    const headers = ["ID", "Meat Type", "Classification", "Confidence", "L*", "a*", "b*", "Contrast", "Correlation", "Energy", "Homogeneity", "Date"];
-    const rows = inspections.map((i) => [
-      i.id,
-      i.meat_type,
-      i.classification,
-      i.confidence_score,
-      i.lab_l,
-      i.lab_a,
-      i.lab_b,
-      i.glcm_contrast,
-      i.glcm_correlation,
-      i.glcm_energy,
-      i.glcm_homogeneity,
-      i.created_at,
-    ]);
-    const csv = [headers, ...rows].map((r) => r.join(",")).join("\n");
-    const blob = new Blob([csv], { type: "text/csv" });
+  const triggerDownload = (blob: Blob, fileName: string) => {
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url;
-    a.download = `MeatLens-export-${format(new Date(), "yyyy-MM-dd")}.csv`;
+    a.download = fileName;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("CSV exported");
+  };
+
+  const getReportFileSuffix = () => `${reportStartDate}_to_${reportEndDate}`;
+
+  const validateReportRange = (): boolean => {
+    if (reportDateRangeInvalid) {
+      toast.error("Report date range is invalid");
+      return false;
+    }
+
+    if (reportRows.length === 0) {
+      toast.error("No inspections found for the selected report range");
+      return false;
+    }
+
+    return true;
+  };
+
+  const handleExportCSV = () => {
+    if (!validateReportRange()) return;
+
+    const headers = [
+      "ID",
+      "Date",
+      "Inspector",
+      "Location",
+      "Meat Type",
+      "Classification",
+      "Confidence",
+      "L*",
+      "a*",
+      "b*",
+      "Contrast",
+      "Correlation",
+      "Energy",
+      "Homogeneity",
+    ];
+    const rows = reportRows.map((row) => [
+      row.id,
+      row.createdAt,
+      row.inspector,
+      row.location,
+      row.meatType,
+      row.classification,
+      row.confidenceScore,
+      row.labL,
+      row.labA,
+      row.labB,
+      row.glcmContrast,
+      row.glcmCorrelation,
+      row.glcmEnergy,
+      row.glcmHomogeneity,
+    ]);
+    const csv = [headers, ...rows]
+      .map((record) => record.map((value) => toCsvValue(value)).join(","))
+      .join("\n");
+    const blob = new Blob([csv], { type: "text/csv;charset=utf-8" });
+    triggerDownload(blob, `MeatLens-report-detail-${getReportFileSuffix()}.csv`);
+    toast.success("CSV detail report exported");
+  };
+
+  const handleExportJSON = () => {
+    if (!validateReportRange()) return;
+
+    const payload = {
+      generatedAt: new Date().toISOString(),
+      generatedBy: user?.email ?? user?.id ?? "admin",
+      dateRange: {
+        start: reportStartDate,
+        end: reportEndDate,
+      },
+      summary: {
+        totalInspections: reportSummary.total,
+        averageConfidence: reportSummary.averageConfidence,
+        spoiledRate: reportSummary.spoiledRate,
+        classificationBreakdown: reportClassCounts,
+      },
+      topInspectors: reportTopInspectors,
+      meatTypeBreakdown: reportByMeatType,
+      inspections: reportRows,
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json;charset=utf-8" });
+    triggerDownload(blob, `MeatLens-report-snapshot-${getReportFileSuffix()}.json`);
+    toast.success("JSON snapshot report exported");
+  };
+
+  const handleExportPDF = () => {
+    if (!validateReportRange()) return;
+
+    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
+    if (!reportWindow) {
+      toast.error("Please allow pop-ups to generate PDF reports");
+      return;
+    }
+
+    const generatedAt = format(new Date(), "MMM d, yyyy h:mm a");
+    const classRows = REPORT_CLASSIFICATIONS
+      .map((classification) => {
+        const count = reportClassCounts[classification];
+        const share = reportSummary.total > 0 ? Math.round((count / reportSummary.total) * 100) : 0;
+        return `<tr><td>${escapeHtml(classification)}</td><td>${count}</td><td>${share}%</td></tr>`;
+      })
+      .join("");
+
+    const inspectorRows = reportTopInspectors.length > 0
+      ? reportTopInspectors
+        .map((entry) => `<tr><td>${escapeHtml(entry.inspector)}</td><td>${entry.count}</td><td>${entry.averageConfidence}%</td></tr>`)
+        .join("")
+      : '<tr><td colspan="3">No inspector data in this range.</td></tr>';
+
+    const meatTypeRows = reportByMeatType.length > 0
+      ? reportByMeatType
+        .map((entry) => `<tr><td>${escapeHtml(entry.meatType)}</td><td>${entry.count}</td></tr>`)
+        .join("")
+      : '<tr><td colspan="2">No meat type data in this range.</td></tr>';
+
+    const html = `
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>MeatLens Report ${escapeHtml(reportStartDate)} to ${escapeHtml(reportEndDate)}</title>
+    <style>
+      :root {
+        color-scheme: light;
+      }
+      body {
+        font-family: "Segoe UI", "Helvetica Neue", Arial, sans-serif;
+        color: #0f172a;
+        margin: 0;
+        padding: 24px;
+        background: #f8fafc;
+      }
+      .sheet {
+        background: white;
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 24px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 26px;
+        letter-spacing: 0.01em;
+      }
+      .meta {
+        margin-top: 8px;
+        color: #475569;
+        font-size: 12px;
+      }
+      .summary-grid {
+        margin-top: 18px;
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        gap: 12px;
+      }
+      .summary-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 12px;
+        padding: 12px;
+      }
+      .summary-card span {
+        display: block;
+        color: #64748b;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      .summary-card strong {
+        display: block;
+        margin-top: 6px;
+        font-size: 24px;
+      }
+      section {
+        margin-top: 18px;
+      }
+      h2 {
+        margin: 0 0 8px;
+        font-size: 16px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        border: 1px solid #e2e8f0;
+        font-size: 12px;
+      }
+      th, td {
+        border: 1px solid #e2e8f0;
+        padding: 8px;
+        text-align: left;
+      }
+      th {
+        background: #f1f5f9;
+        font-size: 11px;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+      }
+      @media print {
+        body {
+          background: white;
+          padding: 0;
+        }
+        .sheet {
+          border: none;
+          border-radius: 0;
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <article class="sheet">
+      <h1>MeatLens Admin Report</h1>
+      <p class="meta">Range: ${escapeHtml(reportStartDate)} to ${escapeHtml(reportEndDate)} | Generated: ${escapeHtml(generatedAt)}</p>
+      <div class="summary-grid">
+        <div class="summary-card"><span>Total Inspections</span><strong>${reportSummary.total}</strong></div>
+        <div class="summary-card"><span>Average Confidence</span><strong>${reportSummary.averageConfidence}%</strong></div>
+        <div class="summary-card"><span>Spoiled Rate</span><strong>${reportSummary.spoiledRate}%</strong></div>
+      </div>
+      <section>
+        <h2>Classification Breakdown</h2>
+        <table>
+          <thead><tr><th>Classification</th><th>Count</th><th>Share</th></tr></thead>
+          <tbody>${classRows}</tbody>
+        </table>
+      </section>
+      <section>
+        <h2>Top Inspectors</h2>
+        <table>
+          <thead><tr><th>Inspector</th><th>Inspections</th><th>Avg Confidence</th></tr></thead>
+          <tbody>${inspectorRows}</tbody>
+        </table>
+      </section>
+      <section>
+        <h2>Meat Type Distribution</h2>
+        <table>
+          <thead><tr><th>Meat Type</th><th>Inspections</th></tr></thead>
+          <tbody>${meatTypeRows}</tbody>
+        </table>
+      </section>
+    </article>
+  </body>
+</html>`;
+
+    reportWindow.document.open();
+    reportWindow.document.write(html);
+    reportWindow.document.close();
+    reportWindow.focus();
+    reportWindow.print();
+
+    toast.success("PDF summary report opened");
   };
 
   const handleCreateCode = async () => {
@@ -610,11 +974,64 @@ const AdminDashboard = () => {
                 <RefreshCcw className="h-4 w-4" />
                 Refresh
               </Button>
-              <Button size="sm" onClick={handleExportCSV} className="gap-2 rounded-xl">
-                <Download className="h-4 w-4" />
-                Export CSV
-              </Button>
             </div>
+          </div>
+
+          <div className="mt-4 rounded-2xl border border-border/70 bg-background/50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Generate Reports</p>
+                <p className="text-sm text-foreground/90">Build PDF summary, CSV detail, or JSON snapshot for a selected date range.</p>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {reportRows.length} inspection{reportRows.length !== 1 ? "s" : ""} in range
+              </p>
+            </div>
+
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <div className="space-y-1">
+                <Label htmlFor="report-start-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Start Date
+                </Label>
+                <Input
+                  id="report-start-date"
+                  type="date"
+                  value={reportStartDate}
+                  onChange={(event) => setReportStartDate(event.target.value)}
+                  className="h-10 rounded-xl"
+                />
+              </div>
+              <div className="space-y-1">
+                <Label htmlFor="report-end-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  End Date
+                </Label>
+                <Input
+                  id="report-end-date"
+                  type="date"
+                  value={reportEndDate}
+                  onChange={(event) => setReportEndDate(event.target.value)}
+                  className="h-10 rounded-xl"
+                />
+              </div>
+              <div className="flex flex-col gap-2 self-end sm:flex-row lg:justify-end">
+                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportPDF}>
+                  <Download className="h-4 w-4" />
+                  PDF Summary
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportCSV}>
+                  <Download className="h-4 w-4" />
+                  CSV Detail
+                </Button>
+                <Button type="button" size="sm" className="gap-2 rounded-xl" onClick={handleExportJSON}>
+                  <Download className="h-4 w-4" />
+                  JSON Snapshot
+                </Button>
+              </div>
+            </div>
+
+            {reportDateRangeInvalid && (
+              <p className="mt-2 text-xs text-destructive">Start date must be on or before end date.</p>
+            )}
           </div>
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
@@ -729,7 +1146,7 @@ const AdminDashboard = () => {
                   <CardTitle className="text-sm font-display uppercase tracking-wider">Classification Breakdown</CardTitle>
                 </CardHeader>
                 <CardContent className="space-y-3">
-                  {(["fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => {
+                  {(["fresh", "not fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => {
                     const count = classificationCounts[c] || 0;
                     const pct = inspections.length > 0 ? (count / inspections.length) * 100 : 0;
                     return (
@@ -999,6 +1416,7 @@ const AdminDashboard = () => {
                         <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Freshness Mix by Day</p>
                         <div className="flex flex-wrap gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
                           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.fresh }} />Fresh</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS["not fresh"] }} />Not Fresh</span>
                           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.acceptable }} />Acceptable</span>
                           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.warning }} />Warning</span>
                           <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.spoiled }} />Spoiled</span>
@@ -1014,6 +1432,7 @@ const AdminDashboard = () => {
                           <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
                           <ChartTooltip content={<ChartTooltipContent />} />
                           <Bar dataKey="fresh" stackId="freshness" fill={PIE_COLORS.fresh} />
+                          <Bar dataKey="notFresh" stackId="freshness" fill={PIE_COLORS["not fresh"]} />
                           <Bar dataKey="acceptable" stackId="freshness" fill={PIE_COLORS.acceptable} />
                           <Bar dataKey="warning" stackId="freshness" fill={PIE_COLORS.warning} />
                           <Bar dataKey="spoiled" stackId="freshness" fill={PIE_COLORS.spoiled} radius={[6, 6, 0, 0]} />

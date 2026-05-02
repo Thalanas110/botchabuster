@@ -7,6 +7,7 @@ import type { FreshnessClassification } from "@/types/inspection";
 
 const classColors: Record<FreshnessClassification, string> = {
   fresh: "bg-fresh",
+  "not fresh": "bg-warning",
   acceptable: "bg-acceptable",
   warning: "bg-warning",
   spoiled: "bg-spoiled",
@@ -23,7 +24,7 @@ const DashboardPage = () => {
     );
   }
 
-  const classifications: FreshnessClassification[] = ["fresh", "acceptable", "warning", "spoiled"];
+  const classifications: FreshnessClassification[] = ["fresh", "not fresh", "acceptable", "warning", "spoiled"];
   const total = stats?.total || 0;
 
   return (

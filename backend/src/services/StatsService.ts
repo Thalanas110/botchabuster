@@ -30,7 +30,7 @@ export class StatsService {
         .from("profiles")
         .select("*", { count: "exact", head: true });
 
-      // Fresh + acceptable rate
+      // Fresh + not-fresh-but-usable rate
       const { data: classData, error } = await supabase
         .from("inspections")
         .select("classification");
@@ -40,7 +40,10 @@ export class StatsService {
       let freshRate = 0;
       if (classData && classData.length > 0) {
         const good = (classData as unknown as { classification: string }[]).filter(
-          (r) => r.classification === "fresh" || r.classification === "acceptable"
+          (r) =>
+            r.classification === "fresh" ||
+            r.classification === "acceptable" ||
+            r.classification === "not fresh"
         ).length;
         freshRate = Math.round((good / classData.length) * 100);
       }

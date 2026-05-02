@@ -1,0 +1,367 @@
+import type { FreshnessClassification } from "@/types/inspection";
+
+export interface SquareGuideBox {
+  x: number;
+  y: number;
+  size: number;
+  normalized?: boolean;
+}
+
+export interface SquareCropRegion {
+  left: number;
+  top: number;
+  side: number;
+}
+
+export interface MeatLensModelMetadata {
+  backbone?: string;
+  preprocess_function_name?: string;
+  input_size?: number | [number, number] | { width?: number; height?: number };
+  image_crop_mode?: string;
+  label_order?: string[];
+}
+
+export type ModelPreprocessMode = "mobilenet_v3" | "efficientnet" | "resnet50" | "identity";
+
+export type FreshnessRecommendation = "Good for Consumption" | "Consume Immediately" | "Not Suitable";
+
+const DEFAULT_INPUT_SIZE = 224;
+const RESNET_MEAN_BGR = {
+  b: 103.939,
+  g: 116.779,
+  r: 123.68,
+};
+
+const DEFAULT_LABEL_ORDER_4 = ["fresh", "acceptable", "warning", "spoiled"] as const;
+const DEFAULT_LABEL_ORDER_3 = ["fresh", "not fresh", "spoiled"] as const;
+const DEFAULT_LABEL_ORDER_2 = ["fresh", "spoiled"] as const;
+
+function isFinitePositive(value: unknown): value is number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0;
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.min(max, Math.max(min, value));
+}
+
+export function resolveSquareCropRegion(
+  imageWidth: number,
+  imageHeight: number,
+  guideBox?: SquareGuideBox | null
+): SquareCropRegion {
+  const safeWidth = Math.max(1, Math.round(imageWidth));
+  const safeHeight = Math.max(1, Math.round(imageHeight));
+
+  const fallbackSide = Math.min(safeWidth, safeHeight);
+  const fallbackLeft = Math.round((safeWidth - fallbackSide) / 2);
+  const fallbackTop = Math.round((safeHeight - fallbackSide) / 2);
+
+  if (!guideBox || !isFinitePositive(guideBox.size)) {
+    return { left: fallbackLeft, top: fallbackTop, side: fallbackSide };
+  }
+
+  const minSide = Math.min(safeWidth, safeHeight);
+
+  const requestedSide = guideBox.normalized
+    ? guideBox.size * minSide
+    : guideBox.size;
+
+  const side = Math.round(clamp(requestedSide, 1, minSide));
+
+  const requestedLeft = guideBox.normalized
+    ? guideBox.x * safeWidth
+    : guideBox.x;
+
+  const requestedTop = guideBox.normalized
+    ? guideBox.y * safeHeight
+    : guideBox.y;
+
+  const left = Math.round(clamp(requestedLeft, 0, safeWidth - side));
+  const top = Math.round(clamp(requestedTop, 0, safeHeight - side));
+
+  return { left, top, side };
+}
+
+export function resolveInputSize(metadata?: MeatLensModelMetadata | null): number {
+  const rawSize = metadata?.input_size;
+
+  if (isFinitePositive(rawSize)) {
+    return Math.round(rawSize);
+  }
+
+  if (Array.isArray(rawSize) && rawSize.length >= 2) {
+    const width = rawSize[0];
+    const height = rawSize[1];
+    if (isFinitePositive(width) && isFinitePositive(height)) {
+      return Math.round(Math.min(width, height));
+    }
+  }
+
+  if (rawSize && typeof rawSize === "object") {
+    const width = (rawSize as { width?: unknown }).width;
+    const height = (rawSize as { height?: unknown }).height;
+    if (isFinitePositive(width) && isFinitePositive(height)) {
+      return Math.round(Math.min(width, height));
+    }
+  }
+
+  return DEFAULT_INPUT_SIZE;
+}
+
+function normalizeMetadataHint(value: string): string {
+  return value.toLowerCase().replace(/[\s_-]+/g, "");
+}
+
+export function resolvePreprocessMode(
+  metadata?: MeatLensModelMetadata | null,
+  fallbackMode: ModelPreprocessMode = "resnet50"
+): ModelPreprocessMode {
+  const preprocessHint = metadata?.preprocess_function_name ?? "";
+  const backboneHint = metadata?.backbone ?? "";
+  const combinedHint = normalizeMetadataHint(`${preprocessHint} ${backboneHint}`);
+
+  if (combinedHint.includes("mobilenetv3")) {
+    return "mobilenet_v3";
+  }
+
+  if (combinedHint.includes("efficientnet")) {
+    return "efficientnet";
+  }
+
+  if (combinedHint.includes("resnet")) {
+    return "resnet50";
+  }
+
+  return fallbackMode;
+}
+
+export function preprocessRgbPixel(
+  pixel: { r: number; g: number; b: number },
+  preprocessMode: ModelPreprocessMode
+): [number, number, number] {
+  switch (preprocessMode) {
+    case "mobilenet_v3": {
+      return [pixel.r / 127.5 - 1, pixel.g / 127.5 - 1, pixel.b / 127.5 - 1];
+    }
+    case "efficientnet": {
+      // Keras EfficientNet preprocessing is a pass-through; the exported model
+      // typically contains an internal rescaling layer.
+      return [pixel.r, pixel.g, pixel.b];
+    }
+    case "resnet50": {
+      // Keras ResNet preprocessing uses BGR channel order and ImageNet means.
+      return [pixel.b - RESNET_MEAN_BGR.b, pixel.g - RESNET_MEAN_BGR.g, pixel.r - RESNET_MEAN_BGR.r];
+    }
+    case "identity":
+    default:
+      return [pixel.r, pixel.g, pixel.b];
+  }
+}
+
+export function buildImageTensorData(
+  imageData: ImageData,
+  channelsFirst: boolean,
+  preprocessMode: ModelPreprocessMode
+): Float32Array {
+  const pixels = imageData.data;
+  const width = imageData.width;
+  const height = imageData.height;
+  const pixelCount = width * height;
+
+  if (channelsFirst) {
+    const channelSize = pixelCount;
+    const output = new Float32Array(3 * channelSize);
+
+    for (let index = 0; index < pixelCount; index++) {
+      const offset = index * 4;
+      const [c0, c1, c2] = preprocessRgbPixel(
+        {
+          r: pixels[offset],
+          g: pixels[offset + 1],
+          b: pixels[offset + 2],
+        },
+        preprocessMode
+      );
+
+      output[index] = c0;
+      output[channelSize + index] = c1;
+      output[channelSize * 2 + index] = c2;
+    }
+
+    return output;
+  }
+
+  const output = new Float32Array(pixelCount * 3);
+
+  for (let index = 0; index < pixelCount; index++) {
+    const offset = index * 4;
+    const [c0, c1, c2] = preprocessRgbPixel(
+      {
+        r: pixels[offset],
+        g: pixels[offset + 1],
+        b: pixels[offset + 2],
+      },
+      preprocessMode
+    );
+
+    const outputOffset = index * 3;
+    output[outputOffset] = c0;
+    output[outputOffset + 1] = c1;
+    output[outputOffset + 2] = c2;
+  }
+
+  return output;
+}
+
+export function normalizeClassificationLabel(label: string): FreshnessClassification {
+  const normalized = label.trim().toLowerCase().replace(/[_-]+/g, " ").replace(/\s+/g, " ");
+
+  if (normalized === "not fresh" || normalized === "notfresh") {
+    return "not fresh";
+  }
+
+  if (normalized === "fresh") {
+    return "fresh";
+  }
+
+  if (normalized === "spoiled") {
+    return "spoiled";
+  }
+
+  if (normalized === "acceptable") {
+    return "acceptable";
+  }
+
+  if (normalized === "warning") {
+    return "warning";
+  }
+
+  return "not fresh";
+}
+
+export function resolveOutputLabels(classCount: number, metadataLabelOrder?: string[] | null): FreshnessClassification[] {
+  const normalizedMetadataOrder = (metadataLabelOrder ?? [])
+    .map((label) => label.trim())
+    .filter((label) => label.length > 0)
+    .map((label) => normalizeClassificationLabel(label));
+
+  if (normalizedMetadataOrder.length === classCount && classCount > 0) {
+    return normalizedMetadataOrder;
+  }
+
+  if (classCount === 4) {
+    return [...DEFAULT_LABEL_ORDER_4];
+  }
+
+  if (classCount === 3) {
+    return [...DEFAULT_LABEL_ORDER_3];
+  }
+
+  if (classCount === 2) {
+    return [...DEFAULT_LABEL_ORDER_2];
+  }
+
+  return [...DEFAULT_LABEL_ORDER_3].slice(0, Math.max(1, Math.min(classCount, DEFAULT_LABEL_ORDER_3.length)));
+}
+
+function softmax(values: number[]): number[] {
+  const maxValue = Math.max(...values);
+  const exponentials = values.map((value) => Math.exp(value - maxValue));
+  const denominator = exponentials.reduce((sum, value) => sum + value, 0);
+  return exponentials.map((value) => value / denominator);
+}
+
+export function normalizeModelProbabilities(values: number[]): number[] {
+  if (values.length === 0) {
+    return [];
+  }
+
+  const allInUnitRange = values.every((value) => value >= 0 && value <= 1);
+  const sum = values.reduce((accumulator, value) => accumulator + value, 0);
+
+  if (allInUnitRange && sum > 0.99 && sum < 1.01) {
+    return values;
+  }
+
+  return softmax(values);
+}
+
+export function parsePrediction(probabilities: number[], labelOrder: string[]): {
+  predictedClass: FreshnessClassification;
+  confidence: number;
+  confidencePercent: number;
+  probabilitiesByLabel: Record<string, number>;
+} {
+  const usableLength = Math.min(probabilities.length, labelOrder.length);
+  if (usableLength === 0) {
+    return {
+      predictedClass: "not fresh",
+      confidence: 0,
+      confidencePercent: 0,
+      probabilitiesByLabel: {},
+    };
+  }
+
+  let maxIndex = 0;
+  let maxValue = probabilities[0];
+
+  for (let index = 1; index < usableLength; index++) {
+    if (probabilities[index] > maxValue) {
+      maxValue = probabilities[index];
+      maxIndex = index;
+    }
+  }
+
+  const probabilitiesByLabel: Record<string, number> = {};
+  for (let index = 0; index < usableLength; index++) {
+    const label = normalizeClassificationLabel(labelOrder[index]);
+    probabilitiesByLabel[label] = probabilities[index];
+  }
+
+  return {
+    predictedClass: normalizeClassificationLabel(labelOrder[maxIndex]),
+    confidence: clamp(maxValue, 0, 1),
+    confidencePercent: Math.round(clamp(maxValue * 100, 0, 100)),
+    probabilitiesByLabel,
+  };
+}
+
+function mapToScoringClass(classification: FreshnessClassification): "fresh" | "not fresh" | "spoiled" {
+  if (classification === "fresh") {
+    return "fresh";
+  }
+
+  if (classification === "spoiled") {
+    return "spoiled";
+  }
+
+  return "not fresh";
+}
+
+export function computeFreshnessScore(predictedClass: string, confidence: number): number {
+  const boundedConfidence = clamp(confidence, 0, 1);
+  const normalizedClass = mapToScoringClass(normalizeClassificationLabel(predictedClass));
+
+  let score: number;
+  if (normalizedClass === "fresh") {
+    score = 70 + 30 * boundedConfidence;
+  } else if (normalizedClass === "not fresh") {
+    score = 40 + 20 * boundedConfidence;
+  } else {
+    score = 39 - 34 * boundedConfidence;
+  }
+
+  return clamp(score, 0, 100);
+}
+
+export function classifyRecommendation(score: number): FreshnessRecommendation {
+  if (score >= 70) {
+    return "Good for Consumption";
+  }
+
+  if (score >= 40) {
+    return "Consume Immediately";
+  }
+
+  return "Not Suitable";
+}

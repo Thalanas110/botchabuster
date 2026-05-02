@@ -1,4 +1,19 @@
-import type { FreshnessClass } from "./classificationEngine";
+import type { FreshnessClassification } from "@/types/inspection";
+import {
+  buildImageTensorData,
+  classifyRecommendation,
+  computeFreshnessScore,
+  normalizeClassificationLabel,
+  normalizeModelProbabilities,
+  parsePrediction,
+  resolveInputSize,
+  resolveOutputLabels,
+  resolvePreprocessMode,
+  resolveSquareCropRegion,
+  type FreshnessRecommendation,
+  type MeatLensModelMetadata,
+  type SquareGuideBox,
+} from "./meatLensPipeline";
 
 const ENV_MODEL_PATH = (import.meta.env.VITE_RESNET50_ONNX_PATH ?? "").trim();
 const ENV_CLASS_LABELS = (import.meta.env.VITE_RESNET50_CLASS_LABELS ?? "").trim();
@@ -16,11 +31,30 @@ const MODEL_CANDIDATE_PATHS = Array.from(
   )
 );
 
+const MODEL_METADATA_CANDIDATE_PATHS = [
+  "/model/meatlens_best_model_metadata.json",
+  "/models/meatlens_best_model_metadata.json",
+  "/models/resnet50_meat/meatlens_best_model_metadata.json",
+  "/models/mobilenetv3_meat/meatlens_best_model_metadata.json",
+];
+
 const FALLBACK_IMAGE_SIZE = 224;
 const RETRY_INTERVAL_MS = 15_000;
-const DEFAULT_CLASSES_4: FreshnessClass[] = ["fresh", "acceptable", "warning", "spoiled"];
-const DEFAULT_CLASSES_3: FreshnessClass[] = ["fresh", "warning", "spoiled"];
-const DEFAULT_CLASSES_2: FreshnessClass[] = ["fresh", "spoiled"];
+const LEGACY_ALLOWED_LABELS = new Set<FreshnessClassification>([
+  "fresh",
+  "not fresh",
+  "spoiled",
+  "acceptable",
+  "warning",
+]);
+
+const DEFAULT_MODEL_METADATA: MeatLensModelMetadata = {
+  backbone: "ResNet50",
+  preprocess_function_name: "resnet50.preprocess_input",
+  input_size: FALLBACK_IMAGE_SIZE,
+  image_crop_mode: "center_crop",
+  label_order: ["fresh", "acceptable", "warning", "spoiled"],
+};
 
 // Keeps the import type-safe while still lazy-loading the runtime.
 type OrtModule = typeof import("onnxruntime-web");
@@ -33,61 +67,31 @@ interface InputLayout {
   height: number;
 }
 
-let ortModule: OrtModule | null = null;
-let session: OnnxSession | null = null;
-let loadedModelPath: string | null = null;
-let loadPromise: Promise<boolean> | null = null;
-let nextRetryAt = 0;
+export interface ModelPredictionResult {
+  classification: FreshnessClassification;
+  confidence: number;
+  confidenceProbability: number;
+  probabilities: Partial<Record<FreshnessClassification, number>>;
+  freshnessScore: number;
+  recommendation: FreshnessRecommendation;
+  labelOrder: FreshnessClassification[];
+  metadata: MeatLensModelMetadata;
+}
 
 interface LoadResNet50Options {
   forceRetry?: boolean;
 }
 
-function parseExplicitClassLabels(): FreshnessClass[] | null {
-  if (!ENV_CLASS_LABELS) {
-    return null;
-  }
-
-  const parsed = ENV_CLASS_LABELS
-    .split(",")
-    .map((value) => value.trim().toLowerCase())
-    .filter(Boolean);
-
-  if (parsed.length === 0) {
-    return null;
-  }
-
-  const allowed = new Set<FreshnessClass>(["fresh", "acceptable", "warning", "spoiled"]);
-  if (!parsed.every((value) => allowed.has(value as FreshnessClass))) {
-    console.warn(
-      `[ResNet50][ONNX] Ignoring VITE_RESNET50_CLASS_LABELS="${ENV_CLASS_LABELS}" because it contains invalid labels.`
-    );
-    return null;
-  }
-
-  return parsed as FreshnessClass[];
+interface ClassifyWithModelOptions {
+  guideBox?: SquareGuideBox | null;
 }
 
-function resolveClassLabels(classCount: number): FreshnessClass[] {
-  const explicitLabels = parseExplicitClassLabels();
-  if (explicitLabels?.length === classCount) {
-    return explicitLabels;
-  }
-
-  if (classCount === 4) {
-    return DEFAULT_CLASSES_4;
-  }
-
-  if (classCount === 3) {
-    return DEFAULT_CLASSES_3;
-  }
-
-  if (classCount === 2) {
-    return DEFAULT_CLASSES_2;
-  }
-
-  return DEFAULT_CLASSES_4.slice(0, Math.min(classCount, DEFAULT_CLASSES_4.length));
-}
+let ortModule: OrtModule | null = null;
+let session: OnnxSession | null = null;
+let loadedModelPath: string | null = null;
+let loadPromise: Promise<boolean> | null = null;
+let metadataPromise: Promise<MeatLensModelMetadata> | null = null;
+let nextRetryAt = 0;
 
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -103,7 +107,7 @@ function normalizeDimension(value: unknown, fallback: number): number {
   return fallback;
 }
 
-function deriveInputLayout(activeSession: OnnxSession): InputLayout {
+function deriveInputLayout(activeSession: OnnxSession, fallbackSize: number): InputLayout {
   const inputName = activeSession.inputNames?.[0];
   if (!inputName) {
     throw new Error("ONNX model has no input tensor.");
@@ -123,14 +127,14 @@ function deriveInputLayout(activeSession: OnnxSession): InputLayout {
     return {
       inputName,
       channelsFirst: true,
-      width: FALLBACK_IMAGE_SIZE,
-      height: FALLBACK_IMAGE_SIZE,
+      width: fallbackSize,
+      height: fallbackSize,
     };
   }
 
-  const d1 = normalizeDimension(dims[1], FALLBACK_IMAGE_SIZE);
-  const d2 = normalizeDimension(dims[2], FALLBACK_IMAGE_SIZE);
-  const d3 = normalizeDimension(dims[3], FALLBACK_IMAGE_SIZE);
+  const d1 = normalizeDimension(dims[1], fallbackSize);
+  const d2 = normalizeDimension(dims[2], fallbackSize);
+  const d3 = normalizeDimension(dims[3], fallbackSize);
 
   if (d1 === 3) {
     return { inputName, channelsFirst: true, height: d2, width: d3 };
@@ -167,26 +171,28 @@ function deriveOutputClassCount(activeSession: OnnxSession): number | null {
   return classCount > 0 ? classCount : null;
 }
 
-function softmax(values: number[]): number[] {
-  const maxLogit = Math.max(...values);
-  const expValues = values.map((value) => Math.exp(value - maxLogit));
-  const sum = expValues.reduce((total, value) => total + value, 0);
-  return expValues.map((value) => value / sum);
-}
-
-function normalizeProbabilities(rawValues: number[]): number[] {
-  if (rawValues.length === 0) {
-    return rawValues;
+function parseExplicitClassLabels(): FreshnessClassification[] | null {
+  if (!ENV_CLASS_LABELS) {
+    return null;
   }
 
-  const inUnitRange = rawValues.every((value) => value >= 0 && value <= 1);
-  const sum = rawValues.reduce((total, value) => total + value, 0);
+  const parsed = ENV_CLASS_LABELS
+    .split(",")
+    .map((value) => normalizeClassificationLabel(value))
+    .filter(Boolean);
 
-  if (inUnitRange && sum > 0.99 && sum < 1.01) {
-    return rawValues;
+  if (parsed.length === 0) {
+    return null;
   }
 
-  return softmax(rawValues);
+  if (!parsed.every((label) => LEGACY_ALLOWED_LABELS.has(label))) {
+    console.warn(
+      `[Model][ONNX] Ignoring VITE_RESNET50_CLASS_LABELS="${ENV_CLASS_LABELS}" because it contains invalid labels.`
+    );
+    return null;
+  }
+
+  return parsed;
 }
 
 async function loadImage(file: File): Promise<HTMLImageElement> {
@@ -204,50 +210,96 @@ async function loadImage(file: File): Promise<HTMLImageElement> {
   }
 }
 
-function buildTensorData(imageData: ImageData, channelsFirst: boolean): Float32Array {
-  const pixels = imageData.data;
-  const height = imageData.height;
-  const width = imageData.width;
+function buildCroppedImageData(
+  image: HTMLImageElement,
+  targetWidth: number,
+  targetHeight: number,
+  guideBox?: SquareGuideBox | null
+): ImageData {
+  const crop = resolveSquareCropRegion(image.width, image.height, guideBox);
 
-  // ResNet50 default preprocessing (keras.applications.resnet): RGB -> BGR,
-  // then channel-wise mean subtraction.
-  const meanB = 103.939;
-  const meanG = 116.779;
-  const meanR = 123.68;
+  const canvas = document.createElement("canvas");
+  canvas.width = targetWidth;
+  canvas.height = targetHeight;
 
-  if (channelsFirst) {
-    const channelSize = width * height;
-    const data = new Float32Array(3 * channelSize);
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Unable to create 2D canvas context.");
+  }
 
-    for (let index = 0; index < channelSize; index++) {
-      const pixelOffset = index * 4;
-      const r = pixels[pixelOffset];
-      const g = pixels[pixelOffset + 1];
-      const b = pixels[pixelOffset + 2];
+  context.imageSmoothingEnabled = true;
+  context.imageSmoothingQuality = "high";
 
-      data[index] = b - meanB;
-      data[channelSize + index] = g - meanG;
-      data[2 * channelSize + index] = r - meanR;
+  context.drawImage(
+    image,
+    crop.left,
+    crop.top,
+    crop.side,
+    crop.side,
+    0,
+    0,
+    targetWidth,
+    targetHeight
+  );
+
+  return context.getImageData(0, 0, targetWidth, targetHeight);
+}
+
+function sanitizeMetadata(payload: unknown): MeatLensModelMetadata {
+  if (!payload || typeof payload !== "object") {
+    return { ...DEFAULT_MODEL_METADATA };
+  }
+
+  const candidate = payload as Record<string, unknown>;
+  const labelOrder = Array.isArray(candidate.label_order)
+    ? candidate.label_order.map((value) => String(value)).map((value) => normalizeClassificationLabel(value))
+    : undefined;
+
+  return {
+    backbone: typeof candidate.backbone === "string" ? candidate.backbone : DEFAULT_MODEL_METADATA.backbone,
+    preprocess_function_name:
+      typeof candidate.preprocess_function_name === "string"
+        ? candidate.preprocess_function_name
+        : DEFAULT_MODEL_METADATA.preprocess_function_name,
+    input_size:
+      typeof candidate.input_size === "number" || Array.isArray(candidate.input_size)
+        ? (candidate.input_size as MeatLensModelMetadata["input_size"])
+        : DEFAULT_MODEL_METADATA.input_size,
+    image_crop_mode:
+      typeof candidate.image_crop_mode === "string"
+        ? candidate.image_crop_mode
+        : DEFAULT_MODEL_METADATA.image_crop_mode,
+    label_order: labelOrder && labelOrder.length > 0 ? labelOrder : DEFAULT_MODEL_METADATA.label_order,
+  };
+}
+
+async function loadModelMetadata(): Promise<MeatLensModelMetadata> {
+  if (metadataPromise) {
+    return metadataPromise;
+  }
+
+  metadataPromise = (async () => {
+    for (const path of MODEL_METADATA_CANDIDATE_PATHS) {
+      try {
+        const response = await fetch(path, { cache: "no-cache" });
+        if (!response.ok) {
+          continue;
+        }
+
+        const metadataJson = await response.json();
+        const parsedMetadata = sanitizeMetadata(metadataJson);
+        console.info(`[Model][ONNX] Loaded metadata from ${path}`);
+        return parsedMetadata;
+      } catch {
+        // Try the next metadata location.
+      }
     }
 
-    return data;
-  }
+    console.info("[Model][ONNX] Metadata file not found; using fallback defaults.");
+    return { ...DEFAULT_MODEL_METADATA };
+  })();
 
-  const data = new Float32Array(width * height * 3);
-  for (let index = 0; index < width * height; index++) {
-    const pixelOffset = index * 4;
-    const outputOffset = index * 3;
-
-    const r = pixels[pixelOffset];
-    const g = pixels[pixelOffset + 1];
-    const b = pixels[pixelOffset + 2];
-
-    data[outputOffset] = b - meanB;
-    data[outputOffset + 1] = g - meanG;
-    data[outputOffset + 2] = r - meanR;
-  }
-
-  return data;
+  return metadataPromise;
 }
 
 async function getOrtModule(): Promise<OrtModule> {
@@ -280,14 +332,14 @@ async function tryLoadModelFromCandidates(ort: OrtModule): Promise<boolean> {
         graphOptimizationLevel: "basic",
       });
       loadedModelPath = modelPath;
-      console.info(`[ResNet50][ONNX] Loaded model from ${modelPath}`);
+      console.info(`[Model][ONNX] Loaded model from ${modelPath}`);
       return true;
     } catch (error) {
       lastError = error;
     }
   }
 
-  console.info("[ResNet50][ONNX] Model not available yet, using rule-based fallback.", lastError);
+  console.info("[Model][ONNX] Model not available yet, using fallback path.", lastError);
   return false;
 }
 
@@ -307,9 +359,10 @@ export async function loadResNet50Model(options: LoadResNet50Options = {}): Prom
   loadPromise = (async () => {
     try {
       const ort = await getOrtModule();
+      await loadModelMetadata();
       return await tryLoadModelFromCandidates(ort);
     } catch (error) {
-      console.warn("[ResNet50][ONNX] Runtime initialization failed:", error);
+      console.warn("[Model][ONNX] Runtime initialization failed:", error);
       return false;
     } finally {
       loadPromise = null;
@@ -327,36 +380,33 @@ export function isModelReady(): boolean {
 }
 
 export async function classifyWithResNet50(
-  imageFile: File
-): Promise<{ classification: FreshnessClass; confidence: number } | null> {
+  imageFile: File,
+  options: ClassifyWithModelOptions = {}
+): Promise<ModelPredictionResult | null> {
   if (!session) {
     return null;
   }
 
   try {
     const ort = await getOrtModule();
-    const layout = deriveInputLayout(session);
+    const metadata = await loadModelMetadata();
+    const preferredInputSize = resolveInputSize(metadata);
+    const layout = deriveInputLayout(session, preferredInputSize);
+
+    const targetWidth = layout.width || preferredInputSize || FALLBACK_IMAGE_SIZE;
+    const targetHeight = layout.height || preferredInputSize || FALLBACK_IMAGE_SIZE;
+
+    const preprocessMode = resolvePreprocessMode(metadata, "resnet50");
     const image = await loadImage(imageFile);
-
-    const canvas = document.createElement("canvas");
-    canvas.width = layout.width;
-    canvas.height = layout.height;
-
-    const context = canvas.getContext("2d");
-    if (!context) {
-      throw new Error("Unable to create 2D canvas context.");
-    }
-
-    context.drawImage(image, 0, 0, layout.width, layout.height);
-    const imageData = context.getImageData(0, 0, layout.width, layout.height);
-    const tensorData = buildTensorData(imageData, layout.channelsFirst);
+    const imageData = buildCroppedImageData(image, targetWidth, targetHeight, options.guideBox);
+    const tensorData = buildImageTensorData(imageData, layout.channelsFirst, preprocessMode);
 
     const inputTensor = new ort.Tensor(
       "float32",
       tensorData,
       layout.channelsFirst
-        ? [1, 3, layout.height, layout.width]
-        : [1, layout.height, layout.width, 3]
+        ? [1, 3, targetHeight, targetWidth]
+        : [1, targetHeight, targetWidth, 3]
     );
 
     const feeds: Record<string, unknown> = { [layout.inputName]: inputTensor };
@@ -377,29 +427,40 @@ export async function classifyWithResNet50(
 
     if (usableClassCount < 2) {
       console.warn(
-        `[ResNet50][ONNX] Unexpected output length ${logits.length}; expected at least 2 classes.`
+        `[Model][ONNX] Unexpected output length ${logits.length}; expected at least 2 classes.`
       );
       return null;
     }
 
-    const classLabels = resolveClassLabels(usableClassCount);
+    const explicitLabels = parseExplicitClassLabels();
+    const classLabels =
+      explicitLabels?.length === usableClassCount
+        ? explicitLabels
+        : resolveOutputLabels(usableClassCount, metadata.label_order);
+
     if (classLabels.length !== usableClassCount) {
       console.warn(
-        `[ResNet50][ONNX] Could not map ${usableClassCount} output classes to MeatLens labels.`
+        `[Model][ONNX] Could not map ${usableClassCount} output classes to labels.`
       );
       return null;
     }
 
-    const probabilities = normalizeProbabilities(logits.slice(0, usableClassCount));
-    const maxProbability = Math.max(...probabilities);
-    const maxIndex = probabilities.indexOf(maxProbability);
+    const probabilities = normalizeModelProbabilities(logits.slice(0, usableClassCount));
+    const prediction = parsePrediction(probabilities, classLabels);
+    const freshnessScore = computeFreshnessScore(prediction.predictedClass, prediction.confidence);
 
     return {
-      classification: classLabels[maxIndex],
-      confidence: Math.round(maxProbability * 100),
+      classification: prediction.predictedClass,
+      confidence: prediction.confidencePercent,
+      confidenceProbability: prediction.confidence,
+      probabilities: prediction.probabilitiesByLabel as Partial<Record<FreshnessClassification, number>>,
+      freshnessScore,
+      recommendation: classifyRecommendation(freshnessScore),
+      labelOrder: classLabels,
+      metadata,
     };
   } catch (error) {
-    console.warn("[ResNet50][ONNX] Inference failed:", error);
+    console.warn("[Model][ONNX] Inference failed:", error);
     return null;
   }
 }

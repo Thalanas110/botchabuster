@@ -38,6 +38,7 @@ async function processScan(
     user_id: scan.userId,
     client_submission_id: scan.id,
     meat_type: scan.meatType,
+    location: scan.location ?? null,
     classification: result.classification,
     confidence_score: result.confidence_score,
     lab_l: result.lab_values.l,
@@ -58,7 +59,8 @@ async function processScan(
   queryClient.invalidateQueries({ queryKey: ["inspection-stats"] });
 
   const label = scan.meatType.charAt(0).toUpperCase() + scan.meatType.slice(1);
-  toast.success(`Synced offline scan: ${label} - ${result.classification}`);
+  const locationSuffix = scan.location ? ` @ ${scan.location}` : "";
+  toast.success(`Synced offline scan: ${label}${locationSuffix} - ${result.classification}`);
 }
 
 /**

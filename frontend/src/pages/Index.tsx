@@ -4,10 +4,13 @@ import { CalibrationBanner } from "@/components/CalibrationBanner";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAnalyzeImage } from "@/hooks/useAnalysis";
 import { useCreateInspection } from "@/hooks/useInspections";
 import type { AnalysisResult, MeatType } from "@/types/inspection";
 import { AnalysisApiError } from "@/integrations/api/AnalysisClient";
+import { marketLocationClient } from "@/integrations/api/MarketLocationClient";
 import { Loader2, Save, RotateCcw, Microscope, TestTube2, Camera, ScanLine, Clock } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
@@ -15,13 +18,17 @@ import { uploadClient } from "@/integrations/api";
 import { queueScan } from "@/lib/offlineQueue";
 import { analyzeOffline } from "@/lib/offlineAnalysis";
 import { loadMobileNetV3, isModelReady as getMobileNetModelReady } from "@/lib/offlineAnalysis/mobileNetV3";
+import { DEFAULT_MARKET_LOCATIONS } from "@/lib/marketLocations";
 
 const DEFAULT_MEAT_TYPE: MeatType = "pork";
+const FALLBACK_MARKET_LOCATIONS = [...DEFAULT_MARKET_LOCATIONS];
 
 const InspectPage = () => {
   const { user, profile } = useAuth();
   const [capturedInput, setCapturedInput] = useState<CapturedImagePayload | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
+  const [marketLocations, setMarketLocations] = useState<string[]>(FALLBACK_MARKET_LOCATIONS);
+  const [selectedLocation, setSelectedLocation] = useState<string>(FALLBACK_MARKET_LOCATIONS[0] ?? "");
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isModelReady, setIsModelReady] = useState<boolean>(() => !navigator.onLine || getMobileNetModelReady());
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "queued">("idle");
@@ -83,6 +90,38 @@ const InspectPage = () => {
       }
       window.removeEventListener("online", handleOnline);
       window.removeEventListener("offline", handleOffline);
+    };
+  }, []);
+
+  useEffect(() => {
+    let isCancelled = false;
+
+    const loadMarketLocations = async () => {
+      try {
+        const locationRows = await marketLocationClient.getAll();
+        if (isCancelled) return;
+
+        const normalizedNames = locationRows
+          .map((row) => row.name.trim().replace(/\s+/g, " "))
+          .filter(Boolean);
+
+        const nextLocations = normalizedNames.length > 0
+          ? Array.from(new Set(normalizedNames))
+          : FALLBACK_MARKET_LOCATIONS;
+
+        setMarketLocations(nextLocations);
+        setSelectedLocation((current) => (nextLocations.some((name) => name === current) ? current : nextLocations[0] ?? ""));
+      } catch {
+        if (isCancelled) return;
+        setMarketLocations(FALLBACK_MARKET_LOCATIONS);
+        setSelectedLocation((current) => (FALLBACK_MARKET_LOCATIONS.some((name) => name === current) ? current : FALLBACK_MARKET_LOCATIONS[0] ?? ""));
+      }
+    };
+
+    void loadMarketLocations();
+
+    return () => {
+      isCancelled = true;
     };
   }, []);
 
@@ -175,6 +214,7 @@ const InspectPage = () => {
           imageType: capturedInput.file.type,
           imageName: capturedInput.file.name,
           meatType: DEFAULT_MEAT_TYPE,
+          location: selectedLocation.trim() || null,
           queuedAt: new Date().toISOString(),
           userId: user.id,
           analysisResult: result,
@@ -204,6 +244,7 @@ const InspectPage = () => {
         user_id: user.id,
         client_submission_id: submissionId,
         meat_type: DEFAULT_MEAT_TYPE,
+        location: selectedLocation.trim() || null,
         classification: result.classification,
         confidence_score: result.confidence_score,
         lab_l: result.lab_values.l,
@@ -225,7 +266,7 @@ const InspectPage = () => {
       console.error("Save error:", error);
       toast.error("Failed to save inspection");
     }
-  }, [result, createInspection, user, capturedInput, clientSubmissionId, saveStatus]);
+  }, [result, createInspection, user, capturedInput, clientSubmissionId, saveStatus, selectedLocation]);
 
   const handleReset = useCallback(() => {
     setCapturedInput(null);
@@ -254,8 +295,8 @@ const InspectPage = () => {
 
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
-              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Sample Type</p>
-              <p className="mt-1 font-display text-2xl font-semibold capitalize">{DEFAULT_MEAT_TYPE}</p>
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Market Location</p>
+              <p className="mt-1 truncate font-display text-2xl font-semibold">{selectedLocation || "--"}</p>
             </div>
             <div className="rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.16)] p-3">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Capture Status</p>
@@ -279,6 +320,26 @@ const InspectPage = () => {
             <div className="mb-3 flex items-center gap-2 text-sm font-display uppercase tracking-wider text-muted-foreground">
               <TestTube2 className="h-4 w-4" />
               Capture Station
+            </div>
+
+            <div className="mb-4 space-y-1">
+              <Label className="text-xs uppercase tracking-widest text-muted-foreground">Location Selection</Label>
+              <Select
+                value={selectedLocation}
+                onValueChange={setSelectedLocation}
+                disabled={saveStatus === "saving" || createInspection.isPending || marketLocations.length === 0}
+              >
+                <SelectTrigger className="h-10 rounded-xl bg-background/60">
+                  <SelectValue placeholder="Select market location" />
+                </SelectTrigger>
+                <SelectContent>
+                  {marketLocations.map((locationName) => (
+                    <SelectItem key={locationName} value={locationName}>
+                      {locationName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
 
             <CalibrationBanner />

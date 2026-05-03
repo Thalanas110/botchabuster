@@ -202,6 +202,39 @@ export async function mockCommonApi(
       return;
     }
 
+    if (path === "/api/market-locations" && method === "GET") {
+      await route.fulfill(
+        jsonResponse([
+          { id: "market-1", name: "Old Market", created_at: "2026-05-03T00:00:00.000Z", updated_at: "2026-05-03T00:00:00.000Z" },
+          { id: "market-2", name: "New Market", created_at: "2026-05-03T00:00:00.000Z", updated_at: "2026-05-03T00:00:00.000Z" },
+          { id: "market-3", name: "Pag-asa Market", created_at: "2026-05-03T00:00:00.000Z", updated_at: "2026-05-03T00:00:00.000Z" },
+          { id: "market-4", name: "Baretto Talipapa", created_at: "2026-05-03T00:00:00.000Z", updated_at: "2026-05-03T00:00:00.000Z" },
+          { id: "market-5", name: "Old Cabalan Talipapa", created_at: "2026-05-03T00:00:00.000Z", updated_at: "2026-05-03T00:00:00.000Z" },
+          { id: "market-6", name: "New Cabalan Talipapa", created_at: "2026-05-03T00:00:00.000Z", updated_at: "2026-05-03T00:00:00.000Z" },
+        ])
+      );
+      return;
+    }
+
+    if (path === "/api/market-locations" && method === "POST") {
+      const payload = JSON.parse(request.postData() ?? "{}") as { name?: string };
+      const normalizedName = payload.name?.trim() || "Unnamed Market";
+      await route.fulfill(
+        jsonResponse({
+          id: `market-${normalizedName.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "new"}`,
+          name: normalizedName,
+          created_at: "2026-05-03T00:00:00.000Z",
+          updated_at: "2026-05-03T00:00:00.000Z",
+        }, 201)
+      );
+      return;
+    }
+
+    if (/^\/api\/market-locations\/[^/]+$/.test(path) && method === "DELETE") {
+      await route.fulfill({ status: 204, body: "" });
+      return;
+    }
+
     if (path === "/api/upload/inspection-image" && method === "POST") {
       await route.fulfill(jsonResponse({ imageUrl: "https://example.com/sample.jpg" }));
       return;

@@ -20,6 +20,7 @@ test("prevents saving the same analyzed record more than once", async ({ page })
 
   let uploadCalls = 0;
   let createCalls = 0;
+  let createPayload = "";
 
   await page.route("**/api/upload/inspection-image", async (route) => {
     uploadCalls += 1;
@@ -34,6 +35,7 @@ test("prevents saving the same analyzed record more than once", async ({ page })
   await page.route("**/api/inspections", async (route) => {
     if (route.request().method() === "POST") {
       createCalls += 1;
+      createPayload = route.request().postData() ?? "";
       await route.fulfill({
         status: 200,
         contentType: "application/json",
@@ -54,5 +56,6 @@ test("prevents saving the same analyzed record more than once", async ({ page })
 
   await expect.poll(() => uploadCalls).toBe(1);
   await expect.poll(() => createCalls).toBe(1);
+  expect(JSON.parse(createPayload)).toMatchObject({ location: "Old Market" });
   await expect(page.getByRole("button", { name: "Record Saved" })).toBeDisabled();
 });

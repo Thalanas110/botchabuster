@@ -11,6 +11,7 @@ import statsRoutes from "./routes/stats";
 import uploadRoutes from "./routes/upload";
 import authRoutes from "./routes/auth";
 import chatRoutes from "./routes/chat";
+import marketLocationRoutes from "./routes/marketLocations";
 
 const config = Config.getInstance();
 const app = express();
@@ -33,6 +34,7 @@ app.use("/api/stats", statsRoutes);
 app.use("/api/upload", uploadRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
+app.use("/api/market-locations", marketLocationRoutes);
 
 // Start server
 app.listen(config.port, () => {

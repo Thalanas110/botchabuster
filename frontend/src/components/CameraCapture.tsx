@@ -353,7 +353,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
                     }}
                   />
                   <p className="absolute bottom-4 rounded-full border border-primary/40 bg-background/70 px-3 py-1 text-[10px] uppercase tracking-wide text-primary">
-                    Place pork inside guide box
+                    Place sample inside guide box
                   </p>
                 </div>
                 <div className="absolute inset-x-0 h-0.5 bg-primary/60 animate-scan-line" />

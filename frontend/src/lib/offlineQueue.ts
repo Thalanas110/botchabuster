@@ -17,6 +17,7 @@ export interface PendingScan {
   imageType: string;
   imageName: string;
   meatType: MeatType;
+  location: string | null;
   queuedAt: string;
   userId: string;
   analysisResult?: AnalysisResult;

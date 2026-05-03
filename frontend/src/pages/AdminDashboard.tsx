@@ -12,6 +12,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { inspectionClient } from "@/integrations/api/InspectionClient";
 import { accessCodeClient, type AccessCode } from "@/integrations/api/AccessCodeClient";
+import { marketLocationClient, type MarketLocation } from "@/integrations/api/MarketLocationClient";
 import type { Inspection, FreshnessClassification } from "@/types/inspection";
 import {
   Loader2,
@@ -32,6 +33,7 @@ import {
   ChevronDown,
   UserPlus,
   Pencil,
+  MapPin,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfDay, endOfDay, isAfter } from "date-fns";
@@ -87,6 +89,7 @@ const tabs = [
   { key: "users" as const, label: "Users", icon: Users },
   { key: "inspections" as const, label: "Inspections", icon: ClipboardList },
   { key: "codes" as const, label: "Access Codes", icon: KeyRound },
+  { key: "markets" as const, label: "Markets", icon: MapPin },
 ];
 
 const getInspectorLabel = (profile?: Profile) =>
@@ -96,6 +99,7 @@ const getLocationLabel = (inspectionLocation: string | null, profile?: Profile) 
   inspectionLocation?.trim() || profile?.location?.trim() || UNSPECIFIED_LOCATION_LABEL;
 
 const truncateChartLabel = (value: string) => (value.length > 12 ? `${value.slice(0, 12)}...` : value);
+const normalizeMarketName = (value: string) => value.trim().replace(/\s+/g, " ");
 
 const escapeHtml = (value: string): string =>
   value
@@ -119,15 +123,18 @@ const AdminDashboard = () => {
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
+  const [marketLocations, setMarketLocations] = useState<MarketLocation[]>([]);
   const [stats, setStats] = useState<{ total_users: number; total_inspections: number; roles: RoleStat[] | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets">("overview");
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
+  const [newMarketName, setNewMarketName] = useState("");
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
   const [pendingDeleteUserId, setPendingDeleteUserId] = useState<string | null>(null);
   const [pendingDeleteInspectionId, setPendingDeleteInspectionId] = useState<string | null>(null);
   const [pendingDeleteCodeId, setPendingDeleteCodeId] = useState<string | null>(null);
+  const [pendingDeleteMarketId, setPendingDeleteMarketId] = useState<string | null>(null);
   const [inspectorFilter, setInspectorFilter] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [isSavingUser, setIsSavingUser] = useState(false);
@@ -170,16 +177,18 @@ const AdminDashboard = () => {
   const loadData = async () => {
     setLoading(true);
     try {
-      const [profileData, inspectionData, statsData, codesData] = await Promise.all([
+      const [profileData, inspectionData, statsData, codesData, marketsData] = await Promise.all([
         profileClient.getAllProfiles(),
         inspectionClient.getAll(200, 0, "all"),
         profileClient.getUserStats(),
         accessCodeClient.getAll(),
+        marketLocationClient.getAll(),
       ]);
       setProfiles(profileData);
       setInspections(inspectionData);
       setStats(statsData);
       setAccessCodes(codesData);
+      setMarketLocations([...marketsData].sort((left, right) => left.name.localeCompare(right.name)));
     } catch (err) {
       console.error("Failed to load admin data:", err);
       toast.error("Failed to load admin data");
@@ -642,11 +651,18 @@ const AdminDashboard = () => {
 
   const triggerDownload = (blob: Blob, fileName: string) => {
     const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = fileName;
-    a.click();
-    URL.revokeObjectURL(url);
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = fileName;
+    anchor.rel = "noopener";
+    anchor.style.display = "none";
+    document.body.appendChild(anchor);
+    anchor.click();
+
+    window.setTimeout(() => {
+      URL.revokeObjectURL(url);
+      anchor.remove();
+    }, 1000);
   };
 
   const getReportFileSuffix = () => `${reportStartDate}_to_${reportEndDate}`;
@@ -736,12 +752,6 @@ const AdminDashboard = () => {
 
   const handleExportPDF = () => {
     if (!validateReportRange()) return;
-
-    const reportWindow = window.open("", "_blank", "noopener,noreferrer");
-    if (!reportWindow) {
-      toast.error("Please allow pop-ups to generate PDF reports");
-      return;
-    }
 
     const generatedAt = format(new Date(), "MMM d, yyyy h:mm a");
     const classRows = REPORT_CLASSIFICATIONS
@@ -893,13 +903,30 @@ const AdminDashboard = () => {
   </body>
 </html>`;
 
-    reportWindow.document.open();
-    reportWindow.document.write(html);
-    reportWindow.document.close();
-    reportWindow.focus();
-    reportWindow.print();
+    const reportBlob = new Blob([html], { type: "text/html;charset=utf-8" });
+    const reportUrl = URL.createObjectURL(reportBlob);
+    const reportWindow = window.open(reportUrl, "_blank");
 
-    toast.success("PDF summary report opened");
+    if (!reportWindow) {
+      URL.revokeObjectURL(reportUrl);
+      triggerDownload(reportBlob, `MeatLens-report-summary-${getReportFileSuffix()}.html`);
+      toast.success("Report downloaded. Open it and choose Print to save as PDF.");
+      return;
+    }
+
+    const cleanup = () => URL.revokeObjectURL(reportUrl);
+    reportWindow.addEventListener("afterprint", cleanup, { once: true });
+    reportWindow.addEventListener(
+      "load",
+      () => {
+        reportWindow.focus();
+        reportWindow.print();
+      },
+      { once: true },
+    );
+    window.setTimeout(cleanup, 60_000);
+
+    toast.success("PDF summary opened. Use Save as PDF in the print dialog.");
   };
 
   const handleCreateCode = async () => {
@@ -942,6 +969,54 @@ const AdminDashboard = () => {
       setAccessCodes((prev) => prev.map((c) => (c.id === id ? { ...c, is_active: active } : c)));
     } catch {
       toast.error("Failed to update code");
+    }
+  };
+
+  const handleCreateMarket = async () => {
+    const normalizedName = normalizeMarketName(newMarketName);
+    if (!normalizedName) {
+      toast.error("Market name cannot be empty");
+      return;
+    }
+
+    const alreadyExists = marketLocations.some(
+      (market) => market.name.localeCompare(normalizedName, undefined, { sensitivity: "accent" }) === 0
+    );
+    if (alreadyExists) {
+      toast.error("Market already exists");
+      return;
+    }
+
+    try {
+      const created = await marketLocationClient.create(normalizedName);
+      setMarketLocations((prev) => [...prev, created].sort((left, right) => left.name.localeCompare(right.name)));
+      setNewMarketName("");
+      toast.success("Market added");
+    } catch {
+      toast.error("Failed to add market");
+    }
+  };
+
+  const handleDeleteMarket = async (id: string) => {
+    if (marketLocations.length <= 1) {
+      toast.error("At least one market location is required");
+      return;
+    }
+
+    setPendingDeleteMarketId(id);
+  };
+
+  const confirmDeleteMarket = async () => {
+    const id = pendingDeleteMarketId;
+    if (!id) return;
+    setPendingDeleteMarketId(null);
+
+    try {
+      await marketLocationClient.delete(id);
+      setMarketLocations((prev) => prev.filter((market) => market.id !== id));
+      toast.success("Market removed");
+    } catch {
+      toast.error("Failed to remove market");
     }
   };
 
@@ -1668,6 +1743,72 @@ const AdminDashboard = () => {
             </Card>
           )}
 
+          {activeTab === "markets" && (
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="text-sm font-display uppercase tracking-wider">Add Market Location</CardTitle>
+                  <CardDescription>
+                    Configure the capture station location options used by inspectors.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Market Name</Label>
+                    <Input
+                      placeholder="e.g. Old Market"
+                      value={newMarketName}
+                      onChange={(e) => setNewMarketName(e.target.value)}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+                  <Button size="sm" onClick={() => void handleCreateMarket()} className="h-10 rounded-xl gap-1">
+                    <Plus className="h-4 w-4" />
+                    Add Market
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="text-sm font-display uppercase tracking-wider">Manage Market Locations</CardTitle>
+                  <CardDescription>
+                    Add or remove barangay markets shown in the capture station selector.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {marketLocations.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No markets configured yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {marketLocations.map((market) => (
+                        <div key={market.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-display text-sm font-semibold">{market.name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                Created {format(new Date(market.created_at), "MMM d, yyyy")}
+                              </p>
+                            </div>
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
+                              onClick={() => void handleDeleteMarket(market.id)}
+                              aria-label={`Delete ${market.name}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
           {activeTab === "codes" && (
             <div className="grid min-w-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
               <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
@@ -1807,6 +1948,16 @@ const AdminDashboard = () => {
         confirmLabel="Delete"
         variant="destructive"
         onConfirm={confirmDeleteCode}
+      />
+
+      <ConfirmDialog
+        open={Boolean(pendingDeleteMarketId)}
+        onOpenChange={(open) => { if (!open) setPendingDeleteMarketId(null); }}
+        title="Delete market location?"
+        description="This location will be removed from the capture station selector for all users."
+        confirmLabel="Delete"
+        variant="destructive"
+        onConfirm={confirmDeleteMarket}
       />
     </div>
   );

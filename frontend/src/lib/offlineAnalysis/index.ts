@@ -27,10 +27,12 @@ import {
   type SquareGuideBox,
 } from "./meatLensPipeline";
 import { loadCalibration } from "./calibrationStore";
+import { buildModelAlignedExplanation } from "./modelExplanation";
 
 export { prewarmModel } from "./mobileNetV3";
 export { calibrateFromImage } from "./calibration";
 export { loadCalibration, saveCalibration, calibrationTTLMs } from "./calibrationStore";
+export { buildModelAlignedExplanation } from "./modelExplanation";
 
 const MODEL_LOAD_WAIT_ONLINE_MS = 45_000;
 const MODEL_LOAD_WAIT_OFFLINE_MS = 2_500;
@@ -118,7 +120,13 @@ export async function analyzeOffline(
   );
 
   if (modelResult) {
-    const explanation = `${ruleResult.explanation} Freshness score is rule-based from model confidence and is not a direct biochemical measurement.`;
+    const explanation = buildModelAlignedExplanation({
+      modelClassification: modelResult.classification,
+      meatType,
+      ruleClassification: ruleResult.classification,
+      ruleConfidenceScore: ruleResult.confidence_score,
+      deviationCount: ruleResult.flagged_deviations.length,
+    });
 
     return {
       classification: modelResult.classification,

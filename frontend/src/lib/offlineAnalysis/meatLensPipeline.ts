@@ -21,6 +21,14 @@ export interface PreprocessImageOptions {
   fileName?: string;
 }
 
+interface CenteredObjectCoverGuideBoxOptions {
+  sourceWidth: number;
+  sourceHeight: number;
+  viewportWidth: number;
+  viewportHeight: number;
+  overlayWidthRatio: number;
+}
+
 export interface MeatLensModelMetadata {
   backbone?: string;
   preprocess_function_name?: string;
@@ -50,6 +58,53 @@ function isFinitePositive(value: unknown): value is number {
 
 function clamp(value: number, min: number, max: number): number {
   return Math.min(max, Math.max(min, value));
+}
+
+/**
+ * Converts a centered square overlay drawn on an object-cover preview surface
+ * into normalized source-image guide-box coordinates.
+ */
+export function resolveCenteredObjectCoverGuideBox({
+  sourceWidth,
+  sourceHeight,
+  viewportWidth,
+  viewportHeight,
+  overlayWidthRatio,
+}: CenteredObjectCoverGuideBoxOptions): SquareGuideBox {
+  const safeSourceWidth = Math.max(1, sourceWidth);
+  const safeSourceHeight = Math.max(1, sourceHeight);
+  const safeViewportWidth = Math.max(1, viewportWidth);
+  const safeViewportHeight = Math.max(1, viewportHeight);
+  const safeOverlayRatio = clamp(overlayWidthRatio, 0.01, 1);
+
+  const coverScale = Math.max(
+    safeViewportWidth / safeSourceWidth,
+    safeViewportHeight / safeSourceHeight
+  );
+  const renderedWidth = safeSourceWidth * coverScale;
+  const renderedHeight = safeSourceHeight * coverScale;
+  const horizontalCrop = (renderedWidth - safeViewportWidth) / 2;
+  const verticalCrop = (renderedHeight - safeViewportHeight) / 2;
+
+  const overlaySideInViewport = safeViewportWidth * safeOverlayRatio;
+  const overlayLeftInViewport = (safeViewportWidth - overlaySideInViewport) / 2;
+  const overlayTopInViewport = (safeViewportHeight - overlaySideInViewport) / 2;
+
+  const projectedSide = overlaySideInViewport / coverScale;
+  const sourceMinSide = Math.min(safeSourceWidth, safeSourceHeight);
+  const clampedSide = clamp(projectedSide, 1, sourceMinSide);
+
+  const projectedLeft = (overlayLeftInViewport + horizontalCrop) / coverScale;
+  const projectedTop = (overlayTopInViewport + verticalCrop) / coverScale;
+  const clampedLeft = clamp(projectedLeft, 0, safeSourceWidth - clampedSide);
+  const clampedTop = clamp(projectedTop, 0, safeSourceHeight - clampedSide);
+
+  return {
+    x: clampedLeft / safeSourceWidth,
+    y: clampedTop / safeSourceHeight,
+    size: clampedSide / sourceMinSide,
+    normalized: true,
+  };
 }
 
 function loadImageElement(file: File): Promise<HTMLImageElement> {

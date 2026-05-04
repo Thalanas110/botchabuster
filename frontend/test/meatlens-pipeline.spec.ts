@@ -5,6 +5,7 @@ import {
   normalizeModelProbabilities,
   parsePrediction,
   preprocessRgbPixel,
+  resolveCenteredObjectCoverGuideBox,
   resolveOutputLabels,
   resolvePreprocessMode,
   resolveSquareCropRegion,
@@ -25,6 +26,33 @@ test.describe("MeatLens inference pipeline helpers", () => {
     });
 
     expect(crop).toEqual({ left: 700, top: 500, side: 300 });
+  });
+
+  test("projects centered overlay guide-box from object-cover viewport to source", () => {
+    const guideBox = resolveCenteredObjectCoverGuideBox({
+      sourceWidth: 1280,
+      sourceHeight: 960,
+      viewportWidth: 400,
+      viewportHeight: 300,
+      overlayWidthRatio: 0.72,
+    });
+    const crop = resolveSquareCropRegion(1280, 960, guideBox);
+
+    expect(guideBox.normalized).toBeTruthy();
+    expect(crop).toEqual({ left: 179, top: 19, side: 922 });
+  });
+
+  test("accounts for object-cover side-cropping on wider camera feeds", () => {
+    const guideBox = resolveCenteredObjectCoverGuideBox({
+      sourceWidth: 1280,
+      sourceHeight: 720,
+      viewportWidth: 400,
+      viewportHeight: 300,
+      overlayWidthRatio: 0.72,
+    });
+    const crop = resolveSquareCropRegion(1280, 720, guideBox);
+
+    expect(crop).toEqual({ left: 294, top: 14, side: 691 });
   });
 
   test("resolves preprocess mode from metadata hints", () => {

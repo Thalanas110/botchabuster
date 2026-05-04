@@ -7,6 +7,7 @@ import { assessCanvasQuality, assessFileQuality } from "@/lib/captureQuality";
 import {
   createCroppedResizedImageFile,
   DEFAULT_MEATLENS_INPUT_SIZE,
+  resolveCenteredObjectCoverGuideBox,
   type SquareGuideBox,
 } from "@/lib/offlineAnalysis/meatLensPipeline";
 
@@ -17,8 +18,6 @@ export interface CapturedImagePayload {
 }
 
 const GUIDE_BOX_SIZE_RATIO = 0.72;
-const GUIDE_BOX_X_RATIO = (1 - GUIDE_BOX_SIZE_RATIO) / 2;
-const GUIDE_BOX_Y_RATIO = (1 - GUIDE_BOX_SIZE_RATIO) / 2;
 const PREVIEW_EXPORT_QUALITY = 0.92;
 
 function readBlobAsDataUrl(blob: Blob): Promise<string> {
@@ -186,12 +185,13 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setCapturedImage(dataUrl);
     setQualitySource("canvas");
     setUploadedFile(null);
-    const guideBox: SquareGuideBox = {
-      x: GUIDE_BOX_X_RATIO,
-      y: GUIDE_BOX_Y_RATIO,
-      size: GUIDE_BOX_SIZE_RATIO,
-      normalized: true,
-    };
+    const guideBox: SquareGuideBox = resolveCenteredObjectCoverGuideBox({
+      sourceWidth: video.videoWidth,
+      sourceHeight: video.videoHeight,
+      viewportWidth: video.clientWidth || video.videoWidth,
+      viewportHeight: video.clientHeight || video.videoHeight,
+      overlayWidthRatio: GUIDE_BOX_SIZE_RATIO,
+    });
     setCaptureGuideBox(guideBox);
 
     canvas.toBlob(

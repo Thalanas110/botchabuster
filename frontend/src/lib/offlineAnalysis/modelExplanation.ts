@@ -26,13 +26,18 @@ export function buildModelAlignedExplanation({
   ruleClassification,
   ruleConfidenceScore,
   deviationCount,
+  finalClassification,
+  usedRuleOverride = false,
 }: {
   modelClassification: string;
   meatType: string;
   ruleClassification: RuleFreshnessClass;
   ruleConfidenceScore: number;
   deviationCount: number;
+  finalClassification?: string;
+  usedRuleOverride?: boolean;
 }): string {
+  const resolvedFinalClassification = finalClassification ?? modelClassification;
   const baseExplanationBuilder = MODEL_CLASS_EXPLANATIONS[modelClassification] ?? MODEL_CLASS_EXPLANATIONS["not fresh"];
   let explanation = baseExplanationBuilder(meatType);
 
@@ -41,11 +46,19 @@ export function buildModelAlignedExplanation({
       modelClassification
     )}, while feature-rule scoring suggested ${formatClassLabel(ruleClassification)} (${Math.round(
       ruleConfidenceScore
-    )}% rule confidence). Final classification follows the model output as the primary basis.`;
-  } else {
+    )}% rule confidence).`;
+  } else if (!usedRuleOverride) {
     explanation += ` Model output is the primary basis, and rule-based scoring supports this outcome (${Math.round(
       ruleConfidenceScore
     )}% rule confidence).`;
+  }
+
+  if (usedRuleOverride && resolvedFinalClassification !== modelClassification) {
+    explanation += ` Because model confidence was low and disagreed with feature-rule scoring, final classification was adjusted to ${formatClassLabel(
+      resolvedFinalClassification
+    )}.`;
+  } else {
+    explanation += " Final classification follows the model output as the primary basis.";
   }
 
   if (deviationCount > 0) {

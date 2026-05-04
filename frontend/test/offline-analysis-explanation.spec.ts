@@ -31,4 +31,20 @@ test.describe("offline analysis explanation alignment", () => {
     expect(explanation.toLowerCase()).toContain("model output is the primary basis");
     expect(explanation.toLowerCase()).not.toContain("disagreement detected");
   });
+
+  test("documents rule override when low-confidence model disagrees", () => {
+    const explanation = buildModelAlignedExplanation({
+      modelClassification: "spoiled",
+      finalClassification: "warning",
+      usedRuleOverride: true,
+      meatType: "pork",
+      ruleClassification: "warning",
+      ruleConfidenceScore: 67,
+      deviationCount: 2,
+    });
+
+    expect(explanation.toLowerCase()).toContain("disagreement detected");
+    expect(explanation.toLowerCase()).toContain("adjusted to warning");
+    expect(explanation.toLowerCase()).not.toContain("follows the model output as the primary basis");
+  });
 });

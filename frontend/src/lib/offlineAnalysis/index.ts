@@ -14,7 +14,7 @@
  * callers (Index.tsx, OfflineSyncManager) need no breaking changes.
  */
 
-import type { AnalysisResult } from "@/types/inspection";
+import type { AnalysisResult, FreshnessClassification } from "@/types/inspection";
 import { extractLabValues } from "./colorAnalysis";
 import { computeGLCMFeatures } from "./textureAnalysis";
 import { classify } from "./classificationEngine";
@@ -38,9 +38,46 @@ const MODEL_LOAD_WAIT_ONLINE_MS = 45_000;
 const MODEL_LOAD_WAIT_OFFLINE_MS = 2_500;
 const MODEL_LOAD_ATTEMPT_INTERVAL_MS = 1_200;
 const ANALYSIS_INPUT_SIZE = DEFAULT_MEATLENS_INPUT_SIZE;
+const LOW_MODEL_CONFIDENCE_THRESHOLD = 60;
+const MIN_RULE_CONFIDENCE_FOR_OVERRIDE = 60;
+type AnalysisPipelineMode = "model_primary" | "rule_guardrail";
+
+function resolveAnalysisPipelineMode(): AnalysisPipelineMode {
+  const rawMode = String(import.meta.env.VITE_ANALYSIS_PIPELINE_MODE ?? "model_primary")
+    .trim()
+    .toLowerCase();
+
+  if (rawMode === "rule_guardrail") {
+    return "rule_guardrail";
+  }
+
+  return "model_primary";
+}
+
+const ANALYSIS_PIPELINE_MODE = resolveAnalysisPipelineMode();
 
 interface AnalyzeOfflineOptions {
   guideBox?: SquareGuideBox | null;
+}
+
+function shouldUseRuleOverride(
+  modelClassification: FreshnessClassification,
+  modelConfidenceScore: number,
+  ruleClassification: "fresh" | "acceptable" | "warning" | "spoiled",
+  ruleConfidenceScore: number
+): boolean {
+  if (ANALYSIS_PIPELINE_MODE !== "rule_guardrail") {
+    return false;
+  }
+
+  // Guardrail: avoid low-confidence "spoiled" false positives when rule
+  // scoring strongly disagrees.
+  return (
+    modelClassification === "spoiled" &&
+    ruleClassification !== "spoiled" &&
+    modelConfidenceScore < LOW_MODEL_CONFIDENCE_THRESHOLD &&
+    ruleConfidenceScore >= MIN_RULE_CONFIDENCE_FOR_OVERRIDE
+  );
 }
 
 async function waitForModelLoad(timeoutMs: number): Promise<boolean> {
@@ -120,21 +157,42 @@ export async function analyzeOffline(
   );
 
   if (modelResult) {
+    const useRuleOverride = shouldUseRuleOverride(
+      modelResult.classification,
+      modelResult.confidence,
+      ruleResult.classification,
+      ruleResult.confidence_score
+    );
+    const finalClassification: FreshnessClassification = useRuleOverride
+      ? ruleResult.classification
+      : modelResult.classification;
+    const finalConfidenceScore = useRuleOverride
+      ? ruleResult.confidence_score
+      : modelResult.confidence;
+    const finalConfidenceProbability = Math.max(0, Math.min(1, finalConfidenceScore / 100));
+    const finalFreshnessScore = computeFreshnessScore(
+      finalClassification,
+      finalConfidenceProbability
+    );
+    const finalRecommendation = classifyRecommendation(finalFreshnessScore);
+
     const explanation = buildModelAlignedExplanation({
       modelClassification: modelResult.classification,
       meatType,
       ruleClassification: ruleResult.classification,
       ruleConfidenceScore: ruleResult.confidence_score,
       deviationCount: ruleResult.flagged_deviations.length,
+      finalClassification,
+      usedRuleOverride: useRuleOverride,
     });
 
     return {
-      classification: modelResult.classification,
-      confidence_score: modelResult.confidence,
+      classification: finalClassification,
+      confidence_score: finalConfidenceScore,
       model_confidence_score: modelResult.confidence,
       rule_confidence_score: ruleResult.confidence_score,
-      freshness_score: Math.round(modelResult.freshnessScore),
-      recommendation: modelResult.recommendation,
+      freshness_score: Math.round(finalFreshnessScore),
+      recommendation: finalRecommendation,
       probabilities: modelResult.probabilities,
       label_order: modelResult.labelOrder,
       lab_values: labValues,

@@ -255,6 +255,10 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
   const retake = useCallback(() => {
     if (disabled) return;
 
+    stream?.getTracks().forEach((track) => track.stop());
+    setStream(null);
+    setIsStreaming(false);
+    setIsVideoReady(false);
     setCapturedImage(null);
     setUploadedFile(null);
     setCaptureGuideBox(null);
@@ -262,8 +266,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setIsPreparingModelPreview(false);
     previewRequestIdRef.current += 1;
     setQualitySource("canvas");
-    void startCamera();
-  }, [disabled, startCamera]);
+  }, [disabled, stream]);
 
   const handleFileInput = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {

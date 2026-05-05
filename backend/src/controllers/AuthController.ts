@@ -11,6 +11,11 @@ export class AuthController {
         return;
       }
 
+      if (!accessCode || !accessCode.trim()) {
+        res.status(400).json({ error: "Access code is required" });
+        return;
+      }
+
       const result = await authService.signIn({ email, password });
       res.json(result);
     } catch (error) {
@@ -39,7 +44,13 @@ export class AuthController {
         return;
       }
 
-      const result = await authService.signUp({ email, password, fullName, accessCode, emailRedirectTo });
+      const result = await authService.signUp({
+        email,
+        password,
+        fullName,
+        accessCode: accessCode.trim(),
+        emailRedirectTo,
+      });
       res.status(201).json(result);
     } catch (error) {
       console.error("Sign up error:", error);

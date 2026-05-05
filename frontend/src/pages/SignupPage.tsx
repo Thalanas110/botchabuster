@@ -14,6 +14,7 @@ const SignupPage = () => {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [accessCode, setAccessCode] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
   const [termsError, setTermsError] = useState("");
   const [showTermsDialog, setShowTermsDialog] = useState(false);
@@ -28,11 +29,15 @@ const SignupPage = () => {
       toast.error("Please accept the Terms and Conditions before creating an account.");
       return;
     }
+    if (!accessCode.trim()) {
+      toast.error("Access code is required.");
+      return;
+    }
 
     setTermsError("");
     setLoading(true);
     try {
-      await signUp(email, password, fullName);
+      await signUp(email, password, fullName, accessCode.trim());
       toast.success("Account created! Check your email to verify.");
       navigate("/login");
     } catch (err: any) {
@@ -84,6 +89,16 @@ const SignupPage = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 minLength={6}
+                required
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="accessCode">Access Code</Label>
+              <Input
+                id="accessCode"
+                placeholder="Enter your organization code"
+                value={accessCode}
+                onChange={(e) => setAccessCode(e.target.value)}
                 required
               />
             </div>

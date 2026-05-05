@@ -22,7 +22,7 @@ export interface SignUpInput {
   email: string;
   password: string;
   fullName?: string;
-  accessCode?: string;
+  accessCode: string;
   emailRedirectTo?: string;
 }
 
@@ -132,12 +132,14 @@ export class AuthService {
   }
 
   async signUp(input: SignUpInput): Promise<{ user: AuthUser | null; session: AuthSession | null }> {
-    const accessCode = input.accessCode?.trim() || undefined;
-    if (accessCode) {
-      const { data: codeIsValid, error: validateError } = await supabase.rpc("validate_access_code", { _code: accessCode });
-      if (validateError) throw new Error(`Failed to validate access code: ${validateError.message}`);
-      if (!codeIsValid) throw new Error("Invalid or expired access code");
+    const accessCode = input.accessCode.trim();
+    if (!accessCode) {
+      throw new Error("Access code is required");
     }
+
+    const { data: codeIsValid, error: validateError } = await supabase.rpc("validate_access_code", { _code: accessCode });
+    if (validateError) throw new Error(`Failed to validate access code: ${validateError.message}`);
+    if (!codeIsValid) throw new Error("Invalid or expired access code");
 
     const fullName = input.fullName?.trim() || undefined;
 
@@ -147,7 +149,7 @@ export class AuthService {
       options: {
         data: {
           ...(fullName ? { full_name: fullName } : {}),
-          ...(accessCode ? { access_code: accessCode } : {}),
+          access_code: accessCode,
         },
         ...(input.emailRedirectTo ? { emailRedirectTo: input.emailRedirectTo } : {}),
       },

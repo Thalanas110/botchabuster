@@ -32,7 +32,7 @@ interface AuthContextType {
   isAdmin: boolean;
   isLoading: boolean;
   signIn: (email: string, password: string) => Promise<{ isAdmin: boolean }>;
-  signUp: (email: string, password: string, fullName: string, accessCode?: string) => Promise<void>;
+  signUp: (email: string, password: string, fullName: string, accessCode: string) => Promise<void>;
   signOut: () => Promise<void>;
   resetPassword: (email: string) => Promise<void>;
   updatePasswordWithRecoveryToken: (accessToken: string, password: string) => Promise<void>;
@@ -176,7 +176,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     return { isAdmin: admin };
   };
 
-  const signUp = async (email: string, password: string, fullName: string, accessCode?: string) => {
+  const signUp = async (email: string, password: string, fullName: string, accessCode: string) => {
     await authClient.signUp({
       email,
       password,

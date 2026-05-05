@@ -44,7 +44,7 @@ export class AuthClient {
     email: string;
     password: string;
     fullName?: string;
-    accessCode?: string;
+    accessCode: string;
     emailRedirectTo?: string;
   }): Promise<{ user: AuthUser | null; session: AuthSession | null }> {
     const res = await fetch(`${API_BASE_URL}/auth/sign-up`, {

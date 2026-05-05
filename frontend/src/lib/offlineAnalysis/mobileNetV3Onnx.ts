@@ -19,15 +19,9 @@ const ENV_MODEL_PATH = (
   import.meta.env.VITE_ONNX_MODEL_PATH ?? ""
 ).trim();
 const ENV_CLASS_LABELS = (
-  import.meta.env.VITE_ONNX_CLASS_LABELS ?? import.meta.env.VITE_RESNET50_CLASS_LABELS ?? ""
+  import.meta.env.VITE_ONNX_CLASS_LABELS ?? ""
 ).trim();
 const ENV_METADATA_PATH = (import.meta.env.VITE_MODEL_METADATA_PATH ?? "").trim();
-const RESNET_MODEL_CANDIDATES = [
-  "/model/meatlens_resnet50_exp2.onnx",
-  "/models/resnet50_meat/meatlens_resnet50_exp2.onnx",
-  "/models/resnet50_meat/model.onnx",
-  "/model/resnet50.onnx",
-];
 const MOBILE_MODEL_CANDIDATES = [
   "/model/meatlens_mobilenetv3small_cnn_only.onnx",
   "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only.onnx",
@@ -36,19 +30,21 @@ const MOBILE_MODEL_CANDIDATES = [
 const MODEL_CANDIDATE_PATHS = Array.from(
   new Set(
     [
-      ENV_MODEL_PATH,
-      ...RESNET_MODEL_CANDIDATES,
       ...MOBILE_MODEL_CANDIDATES,
+      ENV_MODEL_PATH,
     ].filter((path) => path.length > 0)
   )
 );
 
 const MODEL_METADATA_CANDIDATE_PATHS = [
+  "/models/mobilenetv3_meat/meatlens_best_model_metadata.json",
+  "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only_metadata.json",
+  "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+  "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
+  "/model/meatlens_mobilenetv3small_metadata.json",
   ENV_METADATA_PATH,
-  "/model/meatlens_resnet50_exp2_metadata.json",
-  "/models/resnet50_meat/meatlens_resnet50_exp2_metadata.json",
-  "/models/resnet50_meat/model_metadata.json",
   "/model/meatlens_best_model_metadata.json",
+  "/models/meatlens_best_model_metadata.json",
 ].filter((path) => path.length > 0);
 
 const FALLBACK_IMAGE_SIZE = 224;
@@ -62,11 +58,11 @@ const LEGACY_ALLOWED_LABELS = new Set<FreshnessClassification>([
 ]);
 
 const DEFAULT_MODEL_METADATA: MeatLensModelMetadata = {
-  backbone: "ResNet50",
-  preprocess_function_name: "resnet50.preprocess_input",
+  backbone: "MobileNetV3Small",
+  preprocess_function_name: "mobilenet_v3.preprocess_input",
   input_size: FALLBACK_IMAGE_SIZE,
   image_crop_mode: "center_crop",
-  label_order: ["fresh", "acceptable", "warning", "spoiled"],
+  label_order: ["fresh", "not fresh", "spoiled"],
 };
 
 // Keeps the import type-safe while still lazy-loading the runtime.
@@ -409,7 +405,7 @@ export async function classifyWithMobileNetV3(
     const targetWidth = layout.width || preferredInputSize || FALLBACK_IMAGE_SIZE;
     const targetHeight = layout.height || preferredInputSize || FALLBACK_IMAGE_SIZE;
 
-    const preprocessMode = resolvePreprocessMode(metadata, "resnet50");
+    const preprocessMode = resolvePreprocessMode(metadata, "mobilenet_v3");
     const image = await loadImage(imageFile);
     const imageData = buildCroppedImageData(image, targetWidth, targetHeight, options.guideBox);
     const tensorData = buildImageTensorData(imageData, layout.channelsFirst, preprocessMode);

@@ -12,10 +12,10 @@ interface AnalysisResultCardProps {
 
 export function AnalysisResultCard({ result, showDetailedResults = true, className }: AnalysisResultCardProps) {
   const sourceLabel =
-    result.analysis_source === "resnet50+rules"
-      ? "ResNet50 ONNX + Rules"
-      : result.analysis_source === "mobilenetv3+rules"
+    result.analysis_source === "mobilenetv3+rules"
       ? "MobileNetV3 ONNX + Rules"
+      : result.analysis_source === "resnet50+rules"
+      ? "Legacy ONNX + Rules"
       : result.analysis_source === "backend"
       ? "Backend"
       : "Rules Fallback";

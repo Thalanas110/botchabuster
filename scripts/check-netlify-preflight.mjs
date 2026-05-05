@@ -29,21 +29,26 @@ if (!apiBaseUrl.toLowerCase().includes("/api")) {
 }
 
 const modelCandidates = [
-  "model/resnet50.onnx",
-  "model/meatlens_resnet50_exp2.onnx",
-  "frontend/public/model/meatlens_resnet50_exp2.onnx",
-  "frontend/public/models/resnet50_meat/meatlens_resnet50_exp2.onnx",
-  "frontend/public/models/resnet50_meat/model.onnx",
+  "model/meatlens_mobilenetv3small_cnn_only.onnx",
+  "model/meatlens_mobilenetv3small_cnn_only (1).onnx",
+  "frontend/public/model/meatlens_mobilenetv3small_cnn_only.onnx",
+  "frontend/public/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only.onnx",
 ];
 
 const metadataCandidates = [
-  "model/meatlens_resnet50_exp2_metadata.json",
-  "frontend/public/model/meatlens_resnet50_exp2_metadata.json",
-  "frontend/public/models/resnet50_meat/meatlens_resnet50_exp2_metadata.json",
+  "model/meatlens_mobilenetv3small_cnn_only_metadata.json",
+  "model/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+  "model/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
+  "model/meatlens_best_model_metadata.json",
+  "frontend/public/model/meatlens_best_model_metadata.json",
+  "frontend/public/models/mobilenetv3_meat/meatlens_best_model_metadata.json",
+  "frontend/public/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only_metadata.json",
+  "frontend/public/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+  "frontend/public/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
 ];
 
 if (!hasAny(modelCandidates)) {
-  console.error("[netlify-preflight] ResNet50 ONNX file not found. Expected one of:");
+  console.error("[netlify-preflight] MobileNetV3 ONNX file not found. Expected one of:");
   for (const candidate of modelCandidates) {
     console.error(`  - ${candidate}`);
   }
@@ -51,7 +56,11 @@ if (!hasAny(modelCandidates)) {
 }
 
 if (!hasAny(metadataCandidates)) {
-  console.warn("[netlify-preflight] ResNet metadata JSON not found. Falling back to built-in defaults.");
+  console.error("[netlify-preflight] Model metadata JSON not found. Expected one of:");
+  for (const candidate of metadataCandidates) {
+    console.error(`  - ${candidate}`);
+  }
+  process.exit(1);
 }
 
 console.info("[netlify-preflight] Deployment checks passed.");

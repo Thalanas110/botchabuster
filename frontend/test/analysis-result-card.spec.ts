@@ -10,7 +10,7 @@ test("hides technical metric sections when detailed results are disabled", async
   await uploadSamplePhoto(page);
   await page.getByRole("button", { name: "Use Photo" }).click();
   await context.setOffline(true);
-  const analyzeButton = page.getByRole("button", { name: /Analyze Sample|Preparing (MobileNetV3|ResNet50)/i });
+  const analyzeButton = page.getByRole("button", { name: /Analyze Sample|Preparing MobileNetV3/i });
   await expect(analyzeButton).toBeVisible();
   await expect(analyzeButton).toBeEnabled({ timeout: 30_000 });
   await analyzeButton.click();

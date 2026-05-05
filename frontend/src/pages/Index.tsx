@@ -23,6 +23,7 @@ import { DEFAULT_MARKET_LOCATIONS } from "@/lib/marketLocations";
 const DEFAULT_MEAT_TYPE: MeatType = "pork";
 const FALLBACK_MARKET_LOCATIONS = [...DEFAULT_MARKET_LOCATIONS];
 const ENABLE_BACKEND_ANALYSIS_FALLBACK = import.meta.env.VITE_ENABLE_BACKEND_ANALYSIS_FALLBACK === "true";
+const MIN_CONFIDENCE_TO_ACCEPT = 90;
 
 const InspectPage = () => {
   const { user, profile } = useAuth();
@@ -178,6 +179,18 @@ const InspectPage = () => {
           model_path: null,
         };
         toast.warning("Local MobileNetV3 analysis failed; used backend fallback.");
+      }
+
+      if (analysisResult.confidence_score < MIN_CONFIDENCE_TO_ACCEPT) {
+        toast.warning(
+          `Confidence ${analysisResult.confidence_score}% is below ${MIN_CONFIDENCE_TO_ACCEPT}%. Please retake the photo.`
+        );
+        setResult(null);
+        setCapturedInput(null);
+        setSaveStatus("idle");
+        saveLockRef.current = false;
+        setClientSubmissionId(null);
+        return;
       }
 
       setResult(analysisResult);

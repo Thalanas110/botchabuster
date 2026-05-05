@@ -1,4 +1,4 @@
-// Legacy compatibility wrapper. Active ONNX runtime is MobileNetV3.
+// Legacy compatibility wrapper. Active ONNX runtime is currently ResNet50-first.
 export {
   isModelReady,
   prewarmModel,

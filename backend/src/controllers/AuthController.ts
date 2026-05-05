@@ -11,11 +11,6 @@ export class AuthController {
         return;
       }
 
-      if (!accessCode || !accessCode.trim()) {
-        res.status(400).json({ error: "Access code is required" });
-        return;
-      }
-
       const result = await authService.signIn({ email, password });
       res.json(result);
     } catch (error) {
@@ -41,6 +36,11 @@ export class AuthController {
 
       if (password.length < 6) {
         res.status(400).json({ error: "Password must be at least 6 characters" });
+        return;
+      }
+
+      if (!accessCode || !accessCode.trim()) {
+        res.status(400).json({ error: "Access code is required" });
         return;
       }
 

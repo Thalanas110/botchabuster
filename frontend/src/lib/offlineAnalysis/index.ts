@@ -91,12 +91,14 @@ export async function analyzeOffline(
   meatType: string,
   options: AnalyzeOfflineOptions = {}
 ): Promise<AnalysisResult> {
-  // Deterministic preprocessing shared by camera and upload flows.
+  // Use the same deterministic path for camera and upload:
+  // - camera: guide-box square crop
+  // - upload: centered square fallback crop
+  // Both are then resized to 224x224 before feature extraction / inference.
   const processedImageFile = await createCroppedResizedImageFile(imageFile, {
-    guideBox: options.guideBox,
+    guideBox: options.guideBox ?? null,
     size: ANALYSIS_INPUT_SIZE,
-    mimeType: "image/jpeg",
-    quality: 0.92,
+    mimeType: "image/png",
   });
 
   // Load calibration from IndexedDB (null if none / expired)

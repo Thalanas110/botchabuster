@@ -140,6 +140,17 @@ function canvasToBlob(canvas: HTMLCanvasElement, mimeType: string, quality: numb
   });
 }
 
+function resolveOutputExtension(mimeType: string): string {
+  const normalized = mimeType.toLowerCase();
+  if (normalized === "image/png") {
+    return ".png";
+  }
+  if (normalized === "image/webp") {
+    return ".webp";
+  }
+  return ".jpg";
+}
+
 export function resolveSquareCropRegion(
   imageWidth: number,
   imageHeight: number,
@@ -213,7 +224,9 @@ export async function createCroppedResizedImageFile(
   );
 
   const blob = await canvasToBlob(canvas, mimeType, quality);
-  const fileName = options.fileName ?? imageFile.name.replace(/\.[^.]+$/, "") + ".jpg";
+  const fileName =
+    options.fileName ??
+    `${imageFile.name.replace(/\.[^.]+$/, "")}${resolveOutputExtension(mimeType)}`;
   return new File([blob], fileName, {
     type: mimeType,
     lastModified: Date.now(),
@@ -257,6 +270,15 @@ export function resolvePreprocessMode(
   const preprocessHint = metadata?.preprocess_function_name ?? "";
   const backboneHint = metadata?.backbone ?? "";
   const combinedHint = normalizeMetadataHint(`${preprocessHint} ${backboneHint}`);
+
+  if (
+    combinedHint.includes("identity") ||
+    combinedHint.includes("passthrough") ||
+    combinedHint.includes("raw255") ||
+    combinedHint.includes("none")
+  ) {
+    return "identity";
+  }
 
   if (combinedHint.includes("mobilenetv3")) {
     return "mobilenet_v3";

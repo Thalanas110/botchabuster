@@ -3,6 +3,8 @@ import { IS_DEMO_MODE, demoDelay, DEMO_INSPECTIONS, DEMO_STATS } from "@/lib/dem
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:3001/api";
 const SESSION_STORAGE_KEY = "meatlens-auth-session";
+const USER_STORAGE_KEY = "meatlens-auth-user";
+const AUTH_EXPIRED_EVENT = "meatlens:auth-expired";
 
 export type InspectionScope = "mine" | "all";
 
@@ -43,12 +45,49 @@ export class InspectionClient {
     return headers;
   }
 
+  private async readApiError(response: Response): Promise<string> {
+    try {
+      const payload = await response.json() as { error?: unknown; message?: unknown };
+      if (typeof payload.error === "string" && payload.error.trim().length > 0) {
+        return payload.error.trim();
+      }
+      if (typeof payload.message === "string" && payload.message.trim().length > 0) {
+        return payload.message.trim();
+      }
+    } catch {
+      // Ignore JSON parse errors and fall through to generic details.
+    }
+
+    if (response.statusText && response.statusText.trim().length > 0) {
+      return response.statusText.trim();
+    }
+
+    return `HTTP ${response.status}`;
+  }
+
+  private notifyAuthExpired(): void {
+    if (typeof window === "undefined") return;
+    window.localStorage.removeItem(USER_STORAGE_KEY);
+    window.localStorage.removeItem(SESSION_STORAGE_KEY);
+    window.dispatchEvent(new CustomEvent(AUTH_EXPIRED_EVENT));
+  }
+
+  private async createRequestError(action: string, response: Response): Promise<Error> {
+    if (response.status === 401) {
+      this.notifyAuthExpired();
+      return new Error("Session expired. Please sign in again.");
+    }
+
+    const details = await this.readApiError(response);
+    return new Error(`Failed to ${action}: ${details}`);
+  }
+
   async getAll(limit = 50, offset = 0, scope: InspectionScope = "mine"): Promise<Inspection[]> {
     if (IS_DEMO_MODE) return demoDelay(DEMO_INSPECTIONS.slice(offset, offset + limit));
     const res = await fetch(`${API_BASE_URL}/inspections?limit=${limit}&offset=${offset}&scope=${scope}`, {
       headers: this.createHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to fetch inspections: ${res.statusText}`);
+    if (!res.ok) throw await this.createRequestError("fetch inspections", res);
     return res.json();
   }
 
@@ -59,7 +98,7 @@ export class InspectionClient {
     });
     if (!res.ok) {
       if (res.status === 404) return null;
-      throw new Error(`Failed to fetch inspection: ${res.statusText}`);
+      throw await this.createRequestError("fetch inspection", res);
     }
     return res.json();
   }
@@ -95,7 +134,7 @@ export class InspectionClient {
       headers: this.createHeaders({ "Content-Type": "application/json" }),
       body: JSON.stringify(inspection),
     });
-    if (!res.ok) throw new Error(`Failed to create inspection: ${res.statusText}`);
+    if (!res.ok) throw await this.createRequestError("create inspection", res);
     return res.json();
   }
 
@@ -109,7 +148,7 @@ export class InspectionClient {
       method: "DELETE",
       headers: this.createHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to delete inspection: ${res.statusText}`);
+    if (!res.ok) throw await this.createRequestError("delete inspection", res);
   }
 
   async getStatistics(scope: InspectionScope = "mine"): Promise<{
@@ -120,7 +159,7 @@ export class InspectionClient {
     const res = await fetch(`${API_BASE_URL}/inspections/stats?scope=${scope}`, {
       headers: this.createHeaders(),
     });
-    if (!res.ok) throw new Error(`Failed to fetch inspection statistics: ${res.statusText}`);
+    if (!res.ok) throw await this.createRequestError("fetch inspection statistics", res);
     return res.json();
   }
 }

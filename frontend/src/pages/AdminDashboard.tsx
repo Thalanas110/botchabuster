@@ -191,7 +191,8 @@ const AdminDashboard = () => {
       setMarketLocations([...marketsData].sort((left, right) => left.name.localeCompare(right.name)));
     } catch (err) {
       console.error("Failed to load admin data:", err);
-      toast.error("Failed to load admin data");
+      const message = err instanceof Error && err.message ? err.message : "Failed to load admin data";
+      toast.error(message);
     } finally {
       setLoading(false);
     }

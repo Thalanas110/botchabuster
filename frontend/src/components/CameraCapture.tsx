@@ -38,6 +38,7 @@ interface CameraCaptureProps {
 export function CameraCapture({ onCapture, className, disabled = false }: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const capturedImageRef = useRef<HTMLImageElement>(null);
   const previewRequestIdRef = useRef(0);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
@@ -213,6 +214,33 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     setIsVideoReady(false);
   }, [disabled, stream, updateModelInputPreview]);
 
+  const handleCapturedImageLoad = useCallback(() => {
+    if (qualitySource !== "file" || !uploadedFile || !capturedImageRef.current) {
+      return;
+    }
+
+    const imageElement = capturedImageRef.current;
+    const sourceWidth = imageElement.naturalWidth || imageElement.width;
+    const sourceHeight = imageElement.naturalHeight || imageElement.height;
+    const viewportWidth = imageElement.clientWidth || imageElement.width;
+    const viewportHeight = imageElement.clientHeight || imageElement.height;
+
+    if (sourceWidth <= 0 || sourceHeight <= 0 || viewportWidth <= 0 || viewportHeight <= 0) {
+      return;
+    }
+
+    const guideBox = resolveCenteredObjectCoverGuideBox({
+      sourceWidth,
+      sourceHeight,
+      viewportWidth,
+      viewportHeight,
+      overlayWidthRatio: GUIDE_BOX_SIZE_RATIO,
+    });
+
+    setCaptureGuideBox(guideBox);
+    void updateModelInputPreview(uploadedFile, guideBox);
+  }, [qualitySource, updateModelInputPreview, uploadedFile]);
+
   const confirmCapture = useCallback(() => {
     if (disabled) return;
 
@@ -221,7 +249,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
         // Uploaded files already pass assessFileQuality() before preview.
         onCapture({
           file: uploadedFile,
-          guideBox: null,
+          guideBox: captureGuideBox,
           source: "file",
         });
       }
@@ -284,7 +312,9 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
         setUploadedFile(file);
         setQualitySource("file");
         setCaptureGuideBox(null);
-        void updateModelInputPreview(file, null);
+        setModelInputPreview(null);
+        setIsPreparingModelPreview(false);
+        previewRequestIdRef.current += 1;
         const reader = new FileReader();
         reader.onload = (ev) => setCapturedImage(ev.target?.result as string);
         reader.readAsDataURL(file);
@@ -298,7 +328,13 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
       <div className="relative w-full overflow-hidden rounded-2xl border border-border/70 bg-secondary aspect-[4/3] shadow-inner">
         {capturedImage ? (
           <>
-            <img src={capturedImage} alt="Captured" className="h-full w-full object-cover" />
+            <img
+              ref={capturedImageRef}
+              src={capturedImage}
+              alt="Captured"
+              className="h-full w-full object-cover"
+              onLoad={handleCapturedImageLoad}
+            />
             <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
               <div
                 className="rounded-2xl border-2 border-dashed border-primary/75 shadow-[0_0_0_9999px_rgba(0,0,0,0.14)]"
@@ -308,7 +344,9 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
                 }}
               />
               <p className="absolute bottom-4 rounded-full border border-primary/40 bg-background/80 px-3 py-1 text-[10px] uppercase tracking-wide text-primary">
-                {qualitySource === "file" ? "Center crop -> 224x224 model input" : "Guide crop -> 224x224 model input"}
+                {qualitySource === "file" && !captureGuideBox
+                  ? "Center crop -> 224x224 model input"
+                  : "Guide crop -> 224x224 model input"}
               </p>
             </div>
 

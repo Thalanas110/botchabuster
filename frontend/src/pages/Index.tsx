@@ -22,6 +22,7 @@ import { DEFAULT_MARKET_LOCATIONS } from "@/lib/marketLocations";
 
 const DEFAULT_MEAT_TYPE: MeatType = "pork";
 const FALLBACK_MARKET_LOCATIONS = [...DEFAULT_MARKET_LOCATIONS];
+const ENABLE_BACKEND_ANALYSIS_FALLBACK = import.meta.env.VITE_ENABLE_BACKEND_ANALYSIS_FALLBACK === "true";
 
 const InspectPage = () => {
   const { user, profile } = useAuth();
@@ -163,7 +164,7 @@ const InspectPage = () => {
           );
         }
       } catch (offlineError) {
-        if (!navigator.onLine) {
+        if (!navigator.onLine || !ENABLE_BACKEND_ANALYSIS_FALLBACK) {
           throw offlineError;
         }
 
@@ -176,7 +177,7 @@ const InspectPage = () => {
           analysis_source: "backend",
           model_path: null,
         };
-        toast.warning("Local ONNX analysis failed; used backend fallback.");
+        toast.warning("Local MobileNetV3 analysis failed; used backend fallback.");
       }
 
       setResult(analysisResult);

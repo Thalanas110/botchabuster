@@ -137,3 +137,52 @@ test("scopes inspection statistics to the signed-in user by default", async ({ p
   expect(capturedUrl).toContain("/api/inspections/stats?scope=mine");
   expect(authorization).toBe("Bearer session-token");
 });
+
+test("clears cached auth and surfaces a re-login error when inspections returns unauthorized", async ({ page }) => {
+  await page.addInitScript(() => {
+    window.localStorage.setItem(
+      "meatlens-auth-user",
+      JSON.stringify({
+        id: "user-1",
+        email: "inspector@example.com",
+      })
+    );
+  });
+
+  await page.route("**/api/inspections?**", async (route) => {
+    await route.fulfill({
+      status: 401,
+      contentType: "application/json",
+      body: JSON.stringify({ error: "Invalid or expired access token" }),
+    });
+  });
+
+  await page.goto("/");
+  const result = await page.evaluate(async () => {
+    let authExpiredEvents = 0;
+    window.addEventListener("meatlens:auth-expired", () => {
+      authExpiredEvents += 1;
+    });
+
+    const { inspectionClient } = await import("/src/integrations/api/InspectionClient.ts");
+
+    try {
+      await inspectionClient.getAll();
+      return { ok: true };
+    } catch (error) {
+      return {
+        ok: false,
+        message: error instanceof Error ? error.message : String(error),
+        authExpiredEvents,
+        storedUser: window.localStorage.getItem("meatlens-auth-user"),
+        storedSession: window.localStorage.getItem("meatlens-auth-session"),
+      };
+    }
+  });
+
+  expect(result.ok).toBe(false);
+  expect(result.message).toBe("Session expired. Please sign in again.");
+  expect(result.authExpiredEvents).toBe(1);
+  expect(result.storedUser).toBeNull();
+  expect(result.storedSession).toBeNull();
+});

@@ -1,6 +1,7 @@
 import express from "express";
 import cors from "cors";
 import fs from "fs";
+import type { Server } from "http";
 import { Config } from "./config";
 import { createCorsOptions } from "./config/cors";
 import analysisRoutes from "./routes/analysis";
@@ -36,13 +37,33 @@ app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/market-locations", marketLocationRoutes);
 
-// Start server
-app.listen(config.port, () => {
-  console.log(`MeatLens backend running on port ${config.port}`);
-  console.log(`Health check: http://localhost:${config.port}/api/analysis/health`);
-  console.log(
-    `Allowed origins: ${config.allowedOrigins.length > 0 ? config.allowedOrigins.join(", ") : "none configured"}`,
-  );
-});
+function handleServerError(error: NodeJS.ErrnoException): never {
+  if (error.code === "EADDRINUSE") {
+    console.error(`[Startup] Port ${config.port} is already in use.`);
+    console.error(`[Startup] Stop the existing process or set PORT to a different value before starting backend.`);
+    console.error(`[Startup] Example (PowerShell): $env:PORT=3002; npm run dev -w backend`);
+    process.exit(1);
+  }
+
+  console.error("[Startup] Backend failed to start:", error);
+  process.exit(1);
+}
+
+export function startServer(): Server {
+  const server = app.listen(config.port, () => {
+    console.log(`MeatLens backend running on port ${config.port}`);
+    console.log(`Health check: http://localhost:${config.port}/api/analysis/health`);
+    console.log(
+      `Allowed origins: ${config.allowedOrigins.length > 0 ? config.allowedOrigins.join(", ") : "none configured"}`,
+    );
+  });
+
+  server.on("error", handleServerError);
+  return server;
+}
+
+if (require.main === module) {
+  startServer();
+}
 
 export default app;

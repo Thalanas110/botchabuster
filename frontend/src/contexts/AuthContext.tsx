@@ -9,6 +9,21 @@ import {
 
 const USER_STORAGE_KEY = "meatlens-auth-user";
 const SESSION_STORAGE_KEY = "meatlens-auth-session";
+const AUTH_EXPIRED_EVENT = "meatlens:auth-expired";
+
+function hasValidAccessToken(session: AuthSession | null): boolean {
+  if (!session?.access_token) return false;
+
+  if (typeof session.expires_at !== "number" || Number.isNaN(session.expires_at)) {
+    return true;
+  }
+
+  const expiresAtMs = session.expires_at > 1_000_000_000_000
+    ? session.expires_at
+    : session.expires_at * 1000;
+
+  return expiresAtMs > Date.now() + 30_000;
+}
 
 interface AuthContextType {
   user: AuthUser | null;
@@ -76,6 +91,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         const parsedSession = storedSessionRaw ? JSON.parse(storedSessionRaw) as AuthSession : null;
 
         if (!parsedUser?.id) throw new Error("Invalid cached user");
+        if (!hasValidAccessToken(parsedSession)) throw new Error("Cached auth session is missing or expired");
 
         if (!mounted) return;
 
@@ -103,6 +119,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       mounted = false;
     };
   }, [loadUserData]);
+
+  useEffect(() => {
+    const handleAuthExpired = () => {
+      setUser(null);
+      setSession(null);
+      setProfile(null);
+      setIsAdmin(false);
+      setIsLoading(false);
+    };
+
+    window.addEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    return () => {
+      window.removeEventListener(AUTH_EXPIRED_EVENT, handleAuthExpired);
+    };
+  }, []);
 
   const signIn = async (email: string, password: string): Promise<{ isAdmin: boolean }> => {
     // ── Offline path ──────────────────────────────────────────────────────────

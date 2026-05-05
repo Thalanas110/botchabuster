@@ -59,6 +59,7 @@ test.describe("MeatLens inference pipeline helpers", () => {
     expect(resolvePreprocessMode({ preprocess_function_name: "mobilenet_v3.preprocess_input" })).toBe("mobilenet_v3");
     expect(resolvePreprocessMode({ backbone: "EfficientNetB0" })).toBe("efficientnet");
     expect(resolvePreprocessMode({ backbone: "ResNet50" })).toBe("resnet50");
+    expect(resolvePreprocessMode({ preprocess_function_name: "identity" })).toBe("identity");
   });
 
   test("applies MobileNetV3 preprocessing in [-1, 1] range", () => {

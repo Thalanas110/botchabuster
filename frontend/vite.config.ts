@@ -73,17 +73,19 @@ export default defineConfig(({ mode }) => ({
               cacheableResponse: { statuses: [0, 200] },
             },
           },
-          // ONNX model files — cache-first after first successful fetch.
+          // ONNX model files — network-first so new model deployments are
+          // picked up quickly while still allowing cached offline fallback.
           {
             urlPattern: ({ url }: { url: URL }) =>
               url.pathname.endsWith(".onnx") &&
               (url.pathname.startsWith("/model/") || url.pathname.startsWith("/models/")),
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
               cacheName: "onnx-model-cache",
+              networkTimeoutSeconds: 6,
               expiration: {
                 maxEntries: 6,
-                maxAgeSeconds: 60 * 60 * 24 * 30,
+                maxAgeSeconds: 60 * 60 * 24 * 7,
               },
               cacheableResponse: { statuses: [0, 200] },
             },

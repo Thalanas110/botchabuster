@@ -29,6 +29,9 @@ if (!apiBaseUrl.toLowerCase().includes("/api")) {
 }
 
 const modelCandidates = [
+  "model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
+  "frontend/public/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
+  "frontend/public/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
   "model/meatlens_mobilenetv3small_cnn_only.onnx",
   "model/meatlens_mobilenetv3small_cnn_only (1).onnx",
   "frontend/public/model/meatlens_mobilenetv3small_cnn_only.onnx",
@@ -36,6 +39,12 @@ const modelCandidates = [
 ];
 
 const metadataCandidates = [
+  "model/NEW-meatlens_best_model_metadata.json",
+  "model/NEW-meatlens_mobilenetv3small_cnn_only_metadata.json",
+  "model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+  "model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
+  "frontend/public/model/NEW-meatlens_best_model_metadata.json",
+  "frontend/public/models/mobilenetv3_meat/NEW-meatlens_best_model_metadata.json",
   "model/meatlens_mobilenetv3small_cnn_only_metadata.json",
   "model/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
   "model/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",

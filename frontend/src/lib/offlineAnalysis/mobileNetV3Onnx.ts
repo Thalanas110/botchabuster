@@ -22,8 +22,37 @@ const ENV_CLASS_LABELS = (
   import.meta.env.VITE_ONNX_CLASS_LABELS ?? ""
 ).trim();
 const ENV_METADATA_PATH = (import.meta.env.VITE_MODEL_METADATA_PATH ?? "").trim();
+
+function isMobileNetAssetPath(path: string): boolean {
+  const normalized = path.toLowerCase();
+  return (
+    normalized.includes("mobilenet") ||
+    normalized.includes("mobilenetv3") ||
+    normalized.includes("meatlens_best_model")
+  );
+}
+
+const ENV_MOBILE_MODEL_PATH =
+  ENV_MODEL_PATH.length > 0 && isMobileNetAssetPath(ENV_MODEL_PATH)
+    ? ENV_MODEL_PATH
+    : "";
+const ENV_MOBILE_METADATA_PATH =
+  ENV_METADATA_PATH.length > 0 && isMobileNetAssetPath(ENV_METADATA_PATH)
+    ? ENV_METADATA_PATH
+    : "";
+
+if (ENV_MODEL_PATH.length > 0 && !ENV_MOBILE_MODEL_PATH) {
+  console.warn("[Model][ONNX] Ignoring VITE_ONNX_MODEL_PATH because it does not appear to be a MobileNetV3 asset.");
+}
+
+if (ENV_METADATA_PATH.length > 0 && !ENV_MOBILE_METADATA_PATH) {
+  console.warn("[Model][ONNX] Ignoring VITE_MODEL_METADATA_PATH because it does not appear to be MobileNetV3 metadata.");
+}
+
 const MOBILE_MODEL_CANDIDATES = [
+  "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
   "/model/meatlens_mobilenetv3small_cnn_only.onnx",
+  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
   "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only.onnx",
   "/models/mobilenetv3_meat/model.onnx",
 ];
@@ -31,18 +60,26 @@ const MODEL_CANDIDATE_PATHS = Array.from(
   new Set(
     [
       ...MOBILE_MODEL_CANDIDATES,
-      ENV_MODEL_PATH,
+      ENV_MOBILE_MODEL_PATH,
     ].filter((path) => path.length > 0)
   )
 );
 
 const MODEL_METADATA_CANDIDATE_PATHS = [
+  "/model/NEW-meatlens_best_model_metadata.json",
+  "/model/NEW-meatlens_mobilenetv3small_cnn_only_metadata.json",
+  "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+  "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
+  "/models/mobilenetv3_meat/NEW-meatlens_best_model_metadata.json",
+  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cnn_only_metadata.json",
+  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
   "/models/mobilenetv3_meat/meatlens_best_model_metadata.json",
   "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only_metadata.json",
   "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
   "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
   "/model/meatlens_mobilenetv3small_metadata.json",
-  ENV_METADATA_PATH,
+  ENV_MOBILE_METADATA_PATH,
   "/model/meatlens_best_model_metadata.json",
   "/models/meatlens_best_model_metadata.json",
 ].filter((path) => path.length > 0);
@@ -74,6 +111,17 @@ interface InputLayout {
   channelsFirst: boolean;
   width: number;
   height: number;
+}
+
+interface NodeMetadataLike {
+  shape?: ReadonlyArray<number | string>;
+  dimensions?: unknown[];
+  dims?: unknown[];
+}
+
+interface SessionMetadataShape {
+  inputMetadata?: Record<string, NodeMetadataLike> | NodeMetadataLike[];
+  outputMetadata?: Record<string, NodeMetadataLike> | NodeMetadataLike[];
 }
 
 export interface ModelPredictionResult {
@@ -116,21 +164,55 @@ function normalizeDimension(value: unknown, fallback: number): number {
   return fallback;
 }
 
+function resolveMetadataEntry(
+  metadata: Record<string, NodeMetadataLike> | NodeMetadataLike[] | undefined,
+  preferredName?: string
+): NodeMetadataLike | undefined {
+  if (!metadata) {
+    return undefined;
+  }
+
+  if (Array.isArray(metadata)) {
+    return metadata[0];
+  }
+
+  if (preferredName && metadata[preferredName]) {
+    return metadata[preferredName];
+  }
+
+  const firstKey = Object.keys(metadata)[0];
+  return firstKey ? metadata[firstKey] : undefined;
+}
+
+function resolveMetadataDims(metadata: NodeMetadataLike | undefined): ReadonlyArray<number | string> {
+  if (!metadata) {
+    return [];
+  }
+
+  if (Array.isArray(metadata.shape)) {
+    return metadata.shape;
+  }
+
+  if (Array.isArray(metadata.dimensions)) {
+    return metadata.dimensions as ReadonlyArray<number | string>;
+  }
+
+  if (Array.isArray(metadata.dims)) {
+    return metadata.dims as ReadonlyArray<number | string>;
+  }
+
+  return [];
+}
+
 function deriveInputLayout(activeSession: OnnxSession, fallbackSize: number): InputLayout {
   const inputName = activeSession.inputNames?.[0];
   if (!inputName) {
     throw new Error("ONNX model has no input tensor.");
   }
 
-  const metadataList = (activeSession as unknown as {
-    inputMetadata?: Array<{
-      shape?: ReadonlyArray<number | string>;
-      dimensions?: unknown[];
-      dims?: unknown[];
-    }>;
-  }).inputMetadata;
-
-  const dims = metadataList?.[0]?.shape ?? metadataList?.[0]?.dimensions ?? metadataList?.[0]?.dims ?? [];
+  const sessionMetadata = activeSession as unknown as SessionMetadataShape;
+  const inputMetadata = resolveMetadataEntry(sessionMetadata.inputMetadata, inputName);
+  const dims = resolveMetadataDims(inputMetadata);
 
   if (!Array.isArray(dims) || dims.length < 4) {
     return {
@@ -162,15 +244,10 @@ function deriveInputLayout(activeSession: OnnxSession, fallbackSize: number): In
 }
 
 function deriveOutputClassCount(activeSession: OnnxSession): number | null {
-  const metadataList = (activeSession as unknown as {
-    outputMetadata?: Array<{
-      shape?: ReadonlyArray<number | string>;
-      dimensions?: unknown[];
-      dims?: unknown[];
-    }>;
-  }).outputMetadata;
-
-  const dims = metadataList?.[0]?.shape ?? metadataList?.[0]?.dimensions ?? metadataList?.[0]?.dims ?? [];
+  const sessionMetadata = activeSession as unknown as SessionMetadataShape;
+  const firstOutputName = activeSession.outputNames?.[0];
+  const outputMetadata = resolveMetadataEntry(sessionMetadata.outputMetadata, firstOutputName);
+  const dims = resolveMetadataDims(outputMetadata);
   if (!Array.isArray(dims) || dims.length === 0) {
     return null;
   }

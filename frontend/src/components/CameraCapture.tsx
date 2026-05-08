@@ -15,6 +15,7 @@ export interface CapturedImagePayload {
   file: File;
   guideBox?: SquareGuideBox | null;
   source: "camera" | "file";
+  capturedAt: string;
 }
 
 const GUIDE_BOX_SIZE_RATIO = 0.72;
@@ -269,6 +270,7 @@ const startCamera = useCallback(async () => {
           file: uploadedFile,
           guideBox: captureGuideBox,
           source: "file",
+          capturedAt: new Date().toISOString(),
         });
       }
       return;
@@ -290,6 +292,7 @@ const startCamera = useCallback(async () => {
             file,
             guideBox: captureGuideBox,
             source: "camera",
+            capturedAt: new Date().toISOString(),
           });
         }
       },

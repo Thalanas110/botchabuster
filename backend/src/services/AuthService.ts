@@ -1,4 +1,4 @@
-import { supabase } from "../integrations/supabase";
+import { supabase, supabaseAuth } from "../integrations/supabase";
 
 export interface AuthUser {
   id: string;
@@ -63,15 +63,19 @@ export class AuthService {
     };
   }
 
-  private getSupabaseAuthConfig(): { supabaseUrl: string; supabaseServiceKey: string } {
+  private getSupabaseAuthConfig(): { supabaseUrl: string; supabasePublishableKey: string } {
     const supabaseUrl = process.env.SUPABASE_URL;
-    const supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_KEY;
+    const supabasePublishableKey =
+      process.env.SUPABASE_PUBLISHABLE_KEY ||
+      process.env.SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_KEY ||
+      process.env.SUPABASE_SERVICE_KEY;
 
-    if (!supabaseUrl || !supabaseServiceKey) {
+    if (!supabaseUrl || !supabasePublishableKey) {
       throw new Error("Supabase environment variables are missing");
     }
 
-    return { supabaseUrl, supabaseServiceKey };
+    return { supabaseUrl, supabasePublishableKey };
   }
 
   private async ensureProfileExists(user: {
@@ -110,7 +114,7 @@ export class AuthService {
   }
 
   async signIn(input: SignInInput): Promise<{ user: AuthUser; session: AuthSession | null }> {
-    const { data, error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabaseAuth.auth.signInWithPassword({
       email: input.email.trim(),
       password: input.password,
     });
@@ -143,7 +147,7 @@ export class AuthService {
 
     const fullName = input.fullName?.trim() || undefined;
 
-    const { data, error } = await supabase.auth.signUp({
+    const { data, error } = await supabaseAuth.auth.signUp({
       email: input.email.trim(),
       password: input.password,
       options: {
@@ -175,7 +179,7 @@ export class AuthService {
   }
 
   async sendPasswordReset(email: string, redirectTo?: string): Promise<void> {
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim(), redirectTo ? { redirectTo } : undefined);
+    const { error } = await supabaseAuth.auth.resetPasswordForEmail(email.trim(), redirectTo ? { redirectTo } : undefined);
     if (error) throw new Error(`Failed to send password reset: ${error.message}`);
   }
 
@@ -199,11 +203,11 @@ export class AuthService {
       throw new Error("Authentication required");
     }
 
-    const { supabaseUrl, supabaseServiceKey } = this.getSupabaseAuthConfig();
+    const { supabaseUrl, supabasePublishableKey } = this.getSupabaseAuthConfig();
     const userResponse = await fetch(`${supabaseUrl}/auth/v1/user`, {
       headers: {
         Authorization: `Bearer ${trimmedToken}`,
-        apikey: supabaseServiceKey,
+        apikey: supabasePublishableKey,
       },
     });
 

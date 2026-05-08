@@ -6,10 +6,18 @@ import {
   verifyOfflineCredential,
   clearOfflineCredential,
 } from "@/lib/offlineCredentials";
+import { queueAuditLog } from "@/lib/offlineAuditQueue";
 
 const USER_STORAGE_KEY = "meatlens-auth-user";
 const SESSION_STORAGE_KEY = "meatlens-auth-session";
 const AUTH_EXPIRED_EVENT = "meatlens:auth-expired";
+
+const createAuditId = () => {
+  if (typeof crypto !== "undefined" && "randomUUID" in crypto) {
+    return crypto.randomUUID();
+  }
+  return `audit-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+};
 
 function hasValidAccessToken(session: AuthSession | null): boolean {
   if (!session?.access_token) return false;
@@ -160,6 +168,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       setIsAdmin(cachedAdmin);
       // Best-effort profile restore (no network needed if React Query has it cached)
       await loadUserData(cachedUser).catch(() => {});
+
+      try {
+        await queueAuditLog({
+          id: createAuditId(),
+          userId: cachedUser.id,
+          eventType: "auth.sign_in",
+          eventTime: new Date().toISOString(),
+          data: { email },
+          source: { is_offline: true },
+          queuedAt: new Date().toISOString(),
+        });
+      } catch {
+        // Best-effort only; never block offline sign-in.
+      }
+
       return { isAdmin: cachedAdmin };
     }
 
@@ -187,6 +210,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   };
 
   const signOut = async () => {
+    const currentUser = user;
     // Always clear in-memory state immediately
     setUser(null);
     setSession(null);
@@ -203,6 +227,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Offline: keep localStorage so the user can re-authenticate offline.
     // The credential hash and cached session are preserved but in-memory
     // state is cleared, so the app treats the user as signed out.
+
+    if (!navigator.onLine && currentUser) {
+      try {
+        await queueAuditLog({
+          id: createAuditId(),
+          userId: currentUser.id,
+          eventType: "auth.sign_out",
+          eventTime: new Date().toISOString(),
+          data: { email: currentUser.email },
+          source: { is_offline: true },
+          queuedAt: new Date().toISOString(),
+        });
+      } catch {
+        // Best-effort only; never block offline sign-out.
+      }
+    }
   };
 
   const resetPassword = async (email: string) => {

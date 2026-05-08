@@ -28,6 +28,7 @@ export interface InspectionInsert {
   classification: FreshnessClassification;
   confidence_score: number;
   client_submission_id: string;
+  captured_at?: string;
   lab_l?: number | null;
   lab_a?: number | null;
   lab_b?: number | null;

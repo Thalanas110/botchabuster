@@ -13,6 +13,7 @@ import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { inspectionClient } from "@/integrations/api/InspectionClient";
 import { accessCodeClient, type AccessCode } from "@/integrations/api/AccessCodeClient";
 import { marketLocationClient, type MarketLocation } from "@/integrations/api/MarketLocationClient";
+import { auditLogClient, type AuditLogEntry } from "@/integrations/api/AuditLogClient";
 import type { Inspection, FreshnessClassification } from "@/types/inspection";
 import {
   Loader2,
@@ -35,6 +36,7 @@ import {
   Pencil,
   MapPin,
   FileBarChart2,
+  ScrollText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfDay, endOfDay, isAfter } from "date-fns";
@@ -92,6 +94,7 @@ const tabs = [
   { key: "codes" as const, label: "Access Codes", icon: KeyRound },
   { key: "markets" as const, label: "Markets", icon: MapPin },
   { key: "reports" as const, label: "Reports", icon: FileBarChart2 },
+  { key: "logs" as const, label: "Logs", icon: ScrollText },
 ];
 
 const getInspectorLabel = (profile?: Profile) =>
@@ -119,6 +122,38 @@ const toCsvValue = (value: unknown): string => {
   return raw;
 };
 
+const parsePayloadText = (payload: Record<string, unknown>, key: string): string => {
+  const value = payload[key];
+  return typeof value === "string" ? value : "";
+};
+
+const parsePayloadActor = (payload: Record<string, unknown>): { id: string; role: string } => {
+  const actor = payload.actor;
+  if (!actor || typeof actor !== "object" || Array.isArray(actor)) {
+    return { id: "-", role: "-" };
+  }
+
+  const actorRecord = actor as Record<string, unknown>;
+  const id = typeof actorRecord.id === "string" && actorRecord.id.trim() ? actorRecord.id : "-";
+  const role = typeof actorRecord.role === "string" && actorRecord.role.trim() ? actorRecord.role : "-";
+
+  return { id, role };
+};
+
+const parsePayloadSource = (payload: Record<string, unknown>): { ip: string; userAgent: string } => {
+  const source = payload.source;
+  if (!source || typeof source !== "object" || Array.isArray(source)) {
+    return { ip: "-", userAgent: "-" };
+  }
+
+  const sourceRecord = source as Record<string, unknown>;
+  const ip = typeof sourceRecord.ip === "string" && sourceRecord.ip.trim() ? sourceRecord.ip : "-";
+  const userAgent =
+    typeof sourceRecord.user_agent === "string" && sourceRecord.user_agent.trim() ? sourceRecord.user_agent : "-";
+
+  return { ip, userAgent };
+};
+
 const AdminDashboard = () => {
   const { user } = useAuth();
   const isMobile = useIsMobile();
@@ -128,7 +163,7 @@ const AdminDashboard = () => {
   const [marketLocations, setMarketLocations] = useState<MarketLocation[]>([]);
   const [stats, setStats] = useState<{ total_users: number; total_inspections: number; roles: RoleStat[] | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets" | "reports">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets" | "reports" | "logs">("overview");
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
   const [newMarketName, setNewMarketName] = useState("");
@@ -140,6 +175,8 @@ const AdminDashboard = () => {
   const [inspectorFilter, setInspectorFilter] = useState("");
   const [editingUserId, setEditingUserId] = useState<string | null>(null);
   const [isSavingUser, setIsSavingUser] = useState(false);
+  const [auditLogs, setAuditLogs] = useState<AuditLogEntry[]>([]);
+  const [logsLoading, setLogsLoading] = useState(false);
   const [reportStartDate, setReportStartDate] = useState(() => format(subDays(new Date(), REPORT_DEFAULT_RANGE_DAYS - 1), "yyyy-MM-dd"));
   const [reportEndDate, setReportEndDate] = useState(() => format(new Date(), "yyyy-MM-dd"));
   const [userForm, setUserForm] = useState<ManagedUserForm>({
@@ -199,6 +236,25 @@ const AdminDashboard = () => {
       setLoading(false);
     }
   };
+
+  const loadAuditLogs = async () => {
+    setLogsLoading(true);
+    try {
+      const logs = await auditLogClient.listRecent(200);
+      setAuditLogs(logs);
+    } catch (err) {
+      console.error("Failed to load audit logs:", err);
+      const message = err instanceof Error && err.message ? err.message : "Failed to load audit logs";
+      toast.error(message);
+    } finally {
+      setLogsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (activeTab !== "logs") return;
+    void loadAuditLogs();
+  }, [activeTab]);
 
   const handleSubmitUserForm = async () => {
     const email = userForm.email.trim();
@@ -1072,7 +1128,18 @@ const AdminDashboard = () => {
                 {activeTabConfig.label}
               </span>
             </div>
-            <Button variant="outline" size="sm" onClick={() => void loadData()} className="gap-2 rounded-xl">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                if (activeTab === "logs") {
+                  void loadAuditLogs();
+                  return;
+                }
+                void loadData();
+              }}
+              className="gap-2 rounded-xl"
+            >
               <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
@@ -1985,6 +2052,63 @@ const AdminDashboard = () => {
                         <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Fresh</p>
                         <p className="mt-1 font-display text-2xl font-semibold">{reportClassCounts.fresh}</p>
                       </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "logs" && (
+            <div className="mt-6 space-y-4">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="font-display text-sm uppercase tracking-wider">Audit Logs</CardTitle>
+                  <CardDescription className="text-xs">
+                    Recent encrypted audit events decoded on the backend for admin review.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {logsLoading ? (
+                    <div className="flex items-center justify-center py-10 text-muted-foreground">
+                      <Loader2 className="h-5 w-5 animate-spin" />
+                    </div>
+                  ) : auditLogs.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No audit logs found.</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {auditLogs.map((log) => {
+                        const payload = log.payload ?? {};
+                        const eventType = parsePayloadText(payload, "event_type") || "unknown.event";
+                        const eventTime = parsePayloadText(payload, "event_time") || log.created_at;
+                        const actor = parsePayloadActor(payload);
+                        const source = parsePayloadSource(payload);
+
+                        return (
+                          <div key={log.id} className="rounded-2xl border border-border/70 bg-background/50 p-4">
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="min-w-0">
+                                <p className="truncate font-display text-sm font-semibold tracking-tight">{eventType}</p>
+                                <p className="text-[10px] uppercase tracking-wider text-muted-foreground">
+                                  Stored {format(new Date(log.created_at), "MMM d, yyyy h:mm:ss a")}
+                                </p>
+                              </div>
+                              <span className="rounded-full border border-border/70 bg-background/80 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                                {log.key_id}
+                              </span>
+                            </div>
+
+                            <div className="mt-3 grid gap-2 text-xs text-muted-foreground md:grid-cols-2">
+                              <p className="truncate">Event Time: {eventTime}</p>
+                              <p className="truncate">Actor Role: {actor.role}</p>
+                              <p className="truncate">Actor ID: {actor.id}</p>
+                              <p className="truncate">Source IP: {source.ip}</p>
+                              <p className="truncate md:col-span-2">User Agent: {source.userAgent}</p>
+                              <p className="truncate md:col-span-2">Client Event ID: {log.client_event_id}</p>
+                            </div>
+                          </div>
+                        );
+                      })}
                     </div>
                   )}
                 </CardContent>

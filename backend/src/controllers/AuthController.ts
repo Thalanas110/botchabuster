@@ -1,7 +1,17 @@
 import { Request, Response } from "express";
 import { authService } from "../services/AuthService";
+import { profileService } from "../services/ProfileService";
+import { auditLogService, type AuditLogWriteInput } from "../services/AuditLogService";
 
 export class AuthController {
+  private async writeAuditLogSafely(input: AuditLogWriteInput): Promise<void> {
+    try {
+      await auditLogService.write(input);
+    } catch (error) {
+      console.error("Audit log write error:", error);
+    }
+  }
+
   async signIn(req: Request, res: Response): Promise<void> {
     try {
       const { email, password } = req.body as { email?: string; password?: string };
@@ -12,6 +22,26 @@ export class AuthController {
       }
 
       const result = await authService.signIn({ email, password });
+      const isAdmin = await profileService.hasRole(result.user.id, "admin");
+
+      await this.writeAuditLogSafely({
+        payload: {
+          event_type: "auth.sign_in",
+          event_time: new Date().toISOString(),
+          actor: {
+            id: result.user.id,
+            role: isAdmin ? "admin" : "inspector",
+          },
+          source: {
+            ip: req.ip || null,
+            user_agent: req.header("user-agent") || null,
+          },
+          data: {
+            email: result.user.email,
+          },
+        },
+      });
+
       res.json(result);
     } catch (error) {
       console.error("Sign in error:", error);
@@ -58,9 +88,40 @@ export class AuthController {
     }
   }
 
-  async signOut(_req: Request, res: Response): Promise<void> {
+  async signOut(req: Request, res: Response): Promise<void> {
     try {
+      const authorizationHeader = req.header("authorization");
+      if (!authorizationHeader?.startsWith("Bearer ")) {
+        res.status(401).json({ error: "Authentication required" });
+        return;
+      }
+
+      const accessToken = authorizationHeader.slice("Bearer ".length).trim();
+      if (!accessToken) {
+        res.status(401).json({ error: "Authentication required" });
+        return;
+      }
+
+      const user = await authService.getUserByAccessToken(accessToken);
+      const isAdmin = await profileService.hasRole(user.id, "admin");
+
       await authService.signOut();
+
+      await this.writeAuditLogSafely({
+        payload: {
+          event_type: "auth.sign_out",
+          event_time: new Date().toISOString(),
+          actor: {
+            id: user.id,
+            role: isAdmin ? "admin" : "inspector",
+          },
+          source: {
+            ip: req.ip || null,
+            user_agent: req.header("user-agent") || null,
+          },
+        },
+      });
+
       res.status(204).send();
     } catch (error) {
       console.error("Sign out error:", error);

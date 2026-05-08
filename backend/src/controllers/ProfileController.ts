@@ -1,7 +1,27 @@
 import { Request, Response } from "express";
 import { profileService } from "../services/ProfileService";
+import { authService } from "../services/AuthService";
+import { auditLogService } from "../services/AuditLogService";
 
 export class ProfileController {
+  private async resolveActor(req: Request): Promise<{ id: string; role: string } | null> {
+    const authorizationHeader = req.header("authorization");
+    if (!authorizationHeader?.startsWith("Bearer ")) {
+      return null;
+    }
+
+    const accessToken = authorizationHeader.slice("Bearer ".length).trim();
+    if (!accessToken) return null;
+
+    try {
+      const user = await authService.getUserByAccessToken(accessToken);
+      const isAdmin = await profileService.hasRole(user.id, "admin");
+      return { id: user.id, role: isAdmin ? "admin" : "inspector" };
+    } catch {
+      return null;
+    }
+  }
+
   async getProfile(req: Request, res: Response): Promise<void> {
     try {
       const { id } = req.params;
@@ -109,6 +129,30 @@ export class ProfileController {
         avatar_url,
       });
 
+      const actor = await this.resolveActor(req);
+      if (actor) {
+        await auditLogService.write({
+          payload: {
+            event_type: "admin.user.create",
+            event_time: new Date().toISOString(),
+            actor: {
+              id: actor.id,
+              role: actor.role,
+            },
+            source: {
+              ip: req.ip || null,
+              user_agent: req.header("user-agent") || null,
+            },
+            data: {
+              user_id: createdUser.id,
+              email: createdUser.email,
+              inspector_code: createdUser.inspector_code,
+              location: createdUser.location,
+            },
+          },
+        });
+      }
+
       res.status(201).json(createdUser);
     } catch (error) {
       console.error("Create user by admin error:", error);
@@ -147,6 +191,37 @@ export class ProfileController {
         avatar_url,
       });
 
+      const actor = await this.resolveActor(req);
+      if (actor) {
+        const changedFields = [
+          email !== undefined ? "email" : null,
+          password !== undefined ? "password" : null,
+          full_name !== undefined ? "full_name" : null,
+          inspector_code !== undefined ? "inspector_code" : null,
+          location !== undefined ? "location" : null,
+          avatar_url !== undefined ? "avatar_url" : null,
+        ].filter(Boolean);
+
+        await auditLogService.write({
+          payload: {
+            event_type: "admin.user.update",
+            event_time: new Date().toISOString(),
+            actor: {
+              id: actor.id,
+              role: actor.role,
+            },
+            source: {
+              ip: req.ip || null,
+              user_agent: req.header("user-agent") || null,
+            },
+            data: {
+              user_id: updatedUser.id,
+              changed_fields: changedFields,
+            },
+          },
+        });
+      }
+
       res.json(updatedUser);
     } catch (error) {
       console.error("Update user by admin error:", error);
@@ -168,5 +243,26 @@ export class ProfileController {
       console.error("Delete user by admin error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Failed to delete user" });
     }
+
+        const actor = await this.resolveActor(req);
+        if (actor) {
+          await auditLogService.write({
+            payload: {
+              event_type: "admin.user.delete",
+              event_time: new Date().toISOString(),
+              actor: {
+                id: actor.id,
+                role: actor.role,
+              },
+              source: {
+                ip: req.ip || null,
+                user_agent: req.header("user-agent") || null,
+              },
+              data: {
+                user_id: id,
+              },
+            },
+          });
+        }
   }
 }

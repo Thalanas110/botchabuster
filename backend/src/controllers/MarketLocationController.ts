@@ -2,6 +2,7 @@ import { Request, Response } from "express";
 import { authService } from "../services/AuthService";
 import { profileService } from "../services/ProfileService";
 import { marketLocationService } from "../services/MarketLocationService";
+import { auditLogService } from "../services/AuditLogService";
 
 class MarketLocationAccessError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -10,7 +11,7 @@ class MarketLocationAccessError extends Error {
 }
 
 export class MarketLocationController {
-  private async requireAdmin(req: Request): Promise<void> {
+  private async requireAdmin(req: Request): Promise<{ userId: string }> {
     const authorizationHeader = req.header("authorization");
     if (!authorizationHeader?.startsWith("Bearer ")) {
       throw new MarketLocationAccessError(401, "Authentication required");
@@ -34,6 +35,8 @@ export class MarketLocationController {
     if (!isAdmin) {
       throw new MarketLocationAccessError(403, "Admin access required");
     }
+
+    return { userId };
   }
 
   private handleError(action: string, res: Response, error: unknown, fallbackMessage: string): void {
@@ -58,7 +61,7 @@ export class MarketLocationController {
 
   async create(req: Request, res: Response): Promise<void> {
     try {
-      await this.requireAdmin(req);
+      const actor = await this.requireAdmin(req);
 
       const { name } = req.body as { name?: string };
       if (!name || !name.trim()) {
@@ -67,6 +70,26 @@ export class MarketLocationController {
       }
 
       const createdLocation = await marketLocationService.create(name);
+
+      await auditLogService.write({
+        payload: {
+          event_type: "admin.market_location.create",
+          event_time: new Date().toISOString(),
+          actor: {
+            id: actor.userId,
+            role: "admin",
+          },
+          source: {
+            ip: req.ip || null,
+            user_agent: req.header("user-agent") || null,
+          },
+          data: {
+            market_location_id: createdLocation.id,
+            name: createdLocation.name,
+          },
+        },
+      });
+
       res.status(201).json(createdLocation);
     } catch (error) {
       this.handleError("Create market location", res, error, "Failed to create market location");
@@ -75,7 +98,7 @@ export class MarketLocationController {
 
   async delete(req: Request, res: Response): Promise<void> {
     try {
-      await this.requireAdmin(req);
+      const actor = await this.requireAdmin(req);
 
       const { id } = req.params;
       if (!id) {
@@ -84,6 +107,25 @@ export class MarketLocationController {
       }
 
       await marketLocationService.delete(id);
+
+      await auditLogService.write({
+        payload: {
+          event_type: "admin.market_location.delete",
+          event_time: new Date().toISOString(),
+          actor: {
+            id: actor.userId,
+            role: "admin",
+          },
+          source: {
+            ip: req.ip || null,
+            user_agent: req.header("user-agent") || null,
+          },
+          data: {
+            market_location_id: id,
+          },
+        },
+      });
+
       res.status(204).send();
     } catch (error) {
       this.handleError("Delete market location", res, error, "Failed to delete market location");

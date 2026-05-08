@@ -25,6 +25,31 @@ export class AuthClient {
     return AuthClient.instance;
   }
 
+  private getAccessToken(): string | null {
+    if (typeof window === "undefined") return null;
+
+    try {
+      const rawSession = window.localStorage.getItem("meatlens-auth-session");
+      if (!rawSession) return null;
+
+      const parsedSession = JSON.parse(rawSession) as { access_token?: string | null };
+      return parsedSession.access_token ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  private createHeaders(initialHeaders?: HeadersInit): Headers {
+    const headers = new Headers(initialHeaders);
+    const accessToken = this.getAccessToken();
+
+    if (accessToken) {
+      headers.set("Authorization", `Bearer ${accessToken}`);
+    }
+
+    return headers;
+  }
+
   async signIn(email: string, password: string): Promise<{ user: AuthUser; session: AuthSession | null }> {
     const res = await fetch(`${API_BASE_URL}/auth/sign-in`, {
       method: "POST",
@@ -62,7 +87,10 @@ export class AuthClient {
   }
 
   async signOut(): Promise<void> {
-    await fetch(`${API_BASE_URL}/auth/sign-out`, { method: "POST" });
+    await fetch(`${API_BASE_URL}/auth/sign-out`, {
+      method: "POST",
+      headers: this.createHeaders(),
+    });
   }
 
   async resetPassword(email: string, redirectTo?: string): Promise<void> {

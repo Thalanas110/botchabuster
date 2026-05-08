@@ -1,27 +1,15 @@
-import type { MeatType, AnalysisResult } from "@/types/inspection";
-
-const DB_NAME = "meatlens-offline";
+const DB_NAME = "meatlens-audit-offline";
 const DB_VERSION = 1;
-const STORE_NAME = "pending-scans";
+const STORE_NAME = "pending-audit-logs";
 
-/**
- * A scan that was captured while offline.
- * If `analysisResult` is present the analysis already ran (user went offline
- * only during the save step); otherwise the full analyze→upload→save chain
- * is still pending.
- */
-export interface PendingScan {
-  /** Same value used as `client_submission_id` on the server. */
+export interface PendingAuditLog {
   id: string;
-  imageData: ArrayBuffer;
-  imageType: string;
-  imageName: string;
-  meatType: MeatType;
-  location: string | null;
-  capturedAt?: string;
-  queuedAt: string;
   userId: string;
-  analysisResult?: AnalysisResult;
+  eventType: string;
+  eventTime: string;
+  data?: Record<string, unknown>;
+  source?: Record<string, unknown>;
+  queuedAt: string;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -38,27 +26,27 @@ function openDb(): Promise<IDBDatabase> {
   });
 }
 
-export async function queueScan(scan: PendingScan): Promise<void> {
+export async function queueAuditLog(log: PendingAuditLog): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
-    tx.objectStore(STORE_NAME).put(scan);
+    tx.objectStore(STORE_NAME).put(log);
     tx.oncomplete = () => resolve();
     tx.onerror = () => reject(tx.error);
   });
 }
 
-export async function getPendingScans(): Promise<PendingScan[]> {
+export async function getPendingAuditLogs(): Promise<PendingAuditLog[]> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readonly");
     const req = tx.objectStore(STORE_NAME).getAll();
-    req.onsuccess = () => resolve(req.result as PendingScan[]);
+    req.onsuccess = () => resolve(req.result as PendingAuditLog[]);
     req.onerror = () => reject(req.error);
   });
 }
 
-export async function removeScan(id: string): Promise<void> {
+export async function removeAuditLog(id: string): Promise<void> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readwrite");
@@ -68,7 +56,7 @@ export async function removeScan(id: string): Promise<void> {
   });
 }
 
-export async function getPendingCount(): Promise<number> {
+export async function getPendingAuditCount(): Promise<number> {
   const db = await openDb();
   return new Promise((resolve, reject) => {
     const tx = db.transaction(STORE_NAME, "readonly");

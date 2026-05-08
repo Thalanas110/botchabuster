@@ -9,6 +9,8 @@ export class Config {
   readonly port: number;
   readonly supabaseUrl: string;
   readonly supabaseServiceKey: string;
+  readonly auditLogKey: string;
+  readonly auditLogKeyId: string;
   readonly uploadDir: string;
   readonly maxFileSize: number;
   readonly allowedOrigins: string[];
@@ -17,6 +19,8 @@ export class Config {
     this.port = parseInt(process.env.PORT || "3001", 10);
     this.supabaseUrl = process.env.SUPABASE_URL || "";
     this.supabaseServiceKey = process.env.SUPABASE_SERVICE_KEY || "";
+    this.auditLogKey = process.env.AUDIT_LOG_KEY || "";
+    this.auditLogKeyId = process.env.AUDIT_LOG_KEY_ID || "v1";
     this.uploadDir = process.env.UPLOAD_DIR || "./uploads";
     this.maxFileSize = 10 * 1024 * 1024; // 10MB
     this.allowedOrigins = getAllowedOrigins(process.env);

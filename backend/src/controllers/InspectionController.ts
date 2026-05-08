@@ -4,6 +4,7 @@ import { inspectionService } from "../services/InspectionService";
 import type { InspectionScope } from "../services/InspectionService";
 import { profileService } from "../services/ProfileService";
 import type { InspectionInsert } from "../types/inspection";
+import { auditLogService } from "../services/AuditLogService";
 
 class RequestAccessError extends Error {
   constructor(public readonly status: number, message: string) {
@@ -92,16 +93,60 @@ export class InspectionController {
     }
   }
 
+  private normalizeEventTime(value?: string, fallback?: string): string {
+    if (value) {
+      const parsed = Date.parse(value);
+      if (!Number.isNaN(parsed)) {
+        return new Date(parsed).toISOString();
+      }
+    }
+
+    if (fallback) {
+      const parsedFallback = Date.parse(fallback);
+      if (!Number.isNaN(parsedFallback)) {
+        return new Date(parsedFallback).toISOString();
+      }
+    }
+
+    return new Date().toISOString();
+  }
+
   async create(req: Request, res: Response): Promise<void> {
     try {
       const accessContext = await this.getRequestAccessContext(req);
-      const input = req.body as Partial<InspectionInsert>;
+      const { captured_at, ...input } = req.body as Partial<InspectionInsert> & { captured_at?: string };
       if (!input.client_submission_id) {
         res.status(400).json({ error: "client_submission_id is required" });
         return;
       }
 
       const { inspection, created } = await inspectionService.create(input as InspectionInsert, accessContext.userId);
+
+      if (created) {
+        await auditLogService.write({
+          payload: {
+            event_type: "inspection.capture",
+            event_time: this.normalizeEventTime(captured_at, inspection.created_at),
+            actor: {
+              id: accessContext.userId,
+              role: accessContext.isAdmin ? "admin" : "inspector",
+            },
+            source: {
+              ip: req.ip || null,
+              user_agent: req.header("user-agent") || null,
+            },
+            data: {
+              inspection_id: inspection.id,
+              client_submission_id: inspection.client_submission_id,
+              meat_type: inspection.meat_type,
+              location: inspection.location,
+              classification: inspection.classification,
+              confidence_score: inspection.confidence_score,
+            },
+          },
+        });
+      }
+
       res.status(created ? 201 : 200).json(inspection);
     } catch (error) {
       this.handleError("Create inspection", res, error, "Failed to create inspection");
@@ -117,6 +162,27 @@ export class InspectionController {
         return;
       }
       await inspectionService.delete(id, accessContext.userId, accessContext.isAdmin);
+
+      if (accessContext.isAdmin) {
+        await auditLogService.write({
+          payload: {
+            event_type: "admin.inspection.delete",
+            event_time: new Date().toISOString(),
+            actor: {
+              id: accessContext.userId,
+              role: "admin",
+            },
+            source: {
+              ip: req.ip || null,
+              user_agent: req.header("user-agent") || null,
+            },
+            data: {
+              inspection_id: id,
+            },
+          },
+        });
+      }
+
       res.status(204).send();
     } catch (error) {
       this.handleError("Delete inspection", res, error, "Failed to delete inspection");

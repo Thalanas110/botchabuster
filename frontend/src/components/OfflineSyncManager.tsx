@@ -4,7 +4,9 @@ import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadClient } from "@/integrations/api/UploadClient";
 import { inspectionClient } from "@/integrations/api/InspectionClient";
+import { auditLogClient } from "@/integrations/api/AuditLogClient";
 import { getPendingScans, removeScan, type PendingScan } from "@/lib/offlineQueue";
+import { getPendingAuditLogs, removeAuditLog, type PendingAuditLog } from "@/lib/offlineAuditQueue";
 import { prewarmModel } from "@/lib/offlineAnalysis";
 
 /**
@@ -39,6 +41,7 @@ async function processScan(
     client_submission_id: scan.id,
     meat_type: scan.meatType,
     location: scan.location ?? null,
+    captured_at: scan.capturedAt ?? scan.queuedAt,
     classification: result.classification,
     confidence_score: result.confidence_score,
     lab_l: result.lab_values.l,
@@ -63,6 +66,24 @@ async function processScan(
   toast.success(`Synced offline scan: ${label}${locationSuffix} - ${result.classification}`);
 }
 
+async function processAuditLogs(logs: PendingAuditLog[]): Promise<void> {
+  if (logs.length === 0) return;
+
+  await auditLogClient.createBatch(
+    logs.map((log) => ({
+      client_event_id: log.id,
+      event_type: log.eventType,
+      event_time: log.eventTime,
+      data: log.data,
+      source: { ...(log.source ?? {}), is_offline: true },
+    })),
+  );
+
+  for (const log of logs) {
+    await removeAuditLog(log.id);
+  }
+}
+
 /**
  * Mount this component once inside <AuthProvider>.
  * - Drains the offline scan queue when the device comes back online.
@@ -81,6 +102,12 @@ export function OfflineSyncManager() {
 
     isRunning.current = true;
     try {
+      const pendingAuditLogs = await getPendingAuditLogs();
+      const mineAuditLogs = pendingAuditLogs.filter((log) => log.userId === user.id);
+      if (mineAuditLogs.length > 0) {
+        await processAuditLogs(mineAuditLogs);
+      }
+
       const pending = await getPendingScans();
       const mine = pending.filter((s) => s.userId === user.id);
       if (mine.length === 0) return;

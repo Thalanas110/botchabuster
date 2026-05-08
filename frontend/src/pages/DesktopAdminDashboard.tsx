@@ -1065,6 +1065,10 @@ const AdminDashboard = () => {
           <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-border/70 bg-card/95 px-6">
             <div className="flex items-center gap-3">
               <h1 className="font-display text-xl font-semibold tracking-tight">Admin Dashboard</h1>
+              <span className="inline-flex items-center gap-1.5 rounded-full border border-border/70 bg-background/70 px-2.5 py-1 text-[10px] uppercase tracking-widest text-muted-foreground">
+                <ActiveTabIcon className="h-3.5 w-3.5" />
+                {activeTabConfig.label}
+              </span>
             </div>
             <Button variant="outline" size="sm" onClick={() => void loadData()} className="gap-2 rounded-xl">
               <RefreshCcw className="h-4 w-4" />
@@ -1186,36 +1190,38 @@ const AdminDashboard = () => {
           </div>
         </section>
 
-        <section className="mt-4 rounded-3xl border border-border/70 bg-card/85 p-3">
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <button
-                type="button"
-                className="group flex w-full items-center justify-between rounded-2xl border border-primary/40 bg-[hsl(var(--primary)/0.16)] px-4 py-3 text-left transition-colors hover:bg-[hsl(var(--primary)/0.20)]"
-              >
-                <span className="flex items-center gap-2">
-                  <ActiveTabIcon className="h-4 w-4 text-foreground" />
-                  <span className="font-display text-sm uppercase tracking-wider text-foreground">{activeTabConfig.label}</span>
-                </span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
-              </button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-w-[calc(100vw-2rem)] rounded-2xl border-border/70 bg-card/95 p-1">
-              {tabs.map(({ key, label, icon: Icon }) => (
-                <DropdownMenuItem
-                  key={key}
-                  onSelect={() => setActiveTab(key)}
-                  className={`flex items-center gap-2 rounded-xl px-3 py-2 font-display text-xs uppercase tracking-wider ${
-                    activeTab === key ? "bg-[hsl(var(--primary)/0.16)] text-foreground" : "text-muted-foreground"
-                  }`}
+        {isMobile && (
+          <section className="mt-4 rounded-3xl border border-border/70 bg-card/85 p-3">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <button
+                  type="button"
+                  className="group flex w-full items-center justify-between rounded-2xl border border-primary/40 bg-[hsl(var(--primary)/0.16)] px-4 py-3 text-left transition-colors hover:bg-[hsl(var(--primary)/0.20)]"
                 >
-                  <Icon className="h-4 w-4" />
-                  {label}
-                </DropdownMenuItem>
-              ))}
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </section>
+                  <span className="flex items-center gap-2">
+                    <ActiveTabIcon className="h-4 w-4 text-foreground" />
+                    <span className="font-display text-sm uppercase tracking-wider text-foreground">{activeTabConfig.label}</span>
+                  </span>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+                </button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-w-[calc(100vw-2rem)] rounded-2xl border-border/70 bg-card/95 p-1">
+                {tabs.map(({ key, label, icon: Icon }) => (
+                  <DropdownMenuItem
+                    key={key}
+                    onSelect={() => setActiveTab(key)}
+                    className={`flex items-center gap-2 rounded-xl px-3 py-2 font-display text-xs uppercase tracking-wider ${
+                      activeTab === key ? "bg-[hsl(var(--primary)/0.16)] text-foreground" : "text-muted-foreground"
+                    }`}
+                  >
+                    <Icon className="h-4 w-4" />
+                    {label}
+                  </DropdownMenuItem>
+                ))}
+              </DropdownMenuContent>
+            </DropdownMenu>
+          </section>
+        )}
 
         <div className="mt-4 space-y-4">
           {activeTab === "overview" && (

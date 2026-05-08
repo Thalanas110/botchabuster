@@ -20,6 +20,7 @@ import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { PrivacyPolicyDialog } from "@/components/PrivacyPolicyDialog";
 import { TermsAndConditionsDialog } from "@/components/TermsAndConditionsDialog";
 import { useAuth } from "@/contexts/AuthContext";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
@@ -41,6 +42,7 @@ const ProfilePage = () => {
   const [isLightMode, setIsLightMode] = useState(false);
   const [showSignOutConfirm, setShowSignOutConfirm] = useState(false);
   const [showTermsDialog, setShowTermsDialog] = useState(false);
+  const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
 
   const initials = useMemo(() => {
     const source = fullName.trim() || user?.email || "User";
@@ -333,7 +335,7 @@ const ProfilePage = () => {
             </section>
 
             <section className="rounded-3xl border border-border/70 bg-card/90 p-4">
-              <h3 className="font-display text-lg font-semibold">Terms and Conditions Reminder</h3>
+              <h3 className="mb-3 font-display text-lg font-semibold">Terms and Conditions Reminder</h3>
               <p className="mt-1 text-xs text-muted-foreground">
                 MeatLens is an AI-assisted support tool. Final inspection decisions must still follow professional
                 standards and official NMIS or LGU protocols.
@@ -345,6 +347,21 @@ const ProfilePage = () => {
                 onClick={() => setShowTermsDialog(true)}
               >
                 View Terms and Conditions
+              </Button>
+            </section>
+
+            <section className="rounded-3xl border border-border/70 bg-card/90 p-4">
+              <h3 className="mb-3 font-display text-lg font-semibold">Privacy Policy</h3>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Review how MeatLens collects, uses, and protects your data.
+              </p>
+              <Button
+                type="button"
+                variant="outline"
+                className="mt-3 h-10 rounded-xl border-border/80 text-xs uppercase tracking-wider"
+                onClick={() => setShowPrivacyDialog(true)}
+              >
+                View Privacy Policy
               </Button>
             </section>
           </div>
@@ -446,6 +463,7 @@ const ProfilePage = () => {
         onConfirm={handleSignOut}
       />
       <TermsAndConditionsDialog open={showTermsDialog} onOpenChange={setShowTermsDialog} />
+      <PrivacyPolicyDialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog} />
     </div>
   );
 };

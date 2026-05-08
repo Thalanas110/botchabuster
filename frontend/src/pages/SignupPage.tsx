@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { TermsAndConditionsDialog } from "@/components/TermsAndConditionsDialog";
+import { PrivacyPolicyDialog } from "@/components/PrivacyPolicyDialog";
 import { Loader2, ShieldCheck } from "lucide-react";
 import { toast } from "sonner";
 
@@ -16,8 +17,10 @@ const SignupPage = () => {
   const [password, setPassword] = useState("");
   const [accessCode, setAccessCode] = useState("");
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [acceptedPrivacy, setAcceptedPrivacy] = useState(false);
   const [termsError, setTermsError] = useState("");
   const [showTermsDialog, setShowTermsDialog] = useState(false);
+  const [showPrivacyDialog, setShowPrivacyDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const { signUp } = useAuth();
   const navigate = useNavigate();
@@ -27,6 +30,11 @@ const SignupPage = () => {
     if (!acceptedTerms) {
       setTermsError("Please accept the Terms and Conditions before creating an account.");
       toast.error("Please accept the Terms and Conditions before creating an account.");
+      return;
+    }
+    if (!acceptedPrivacy) {
+      setTermsError("Please accept the Privacy Policy before creating an account.");
+      toast.error("Please accept the Privacy Policy before creating an account.");
       return;
     }
     if (!accessCode.trim()) {
@@ -136,6 +144,35 @@ const SignupPage = () => {
                 </p>
               ) : null}
             </div>
+            <div className="space-y-2 rounded-xl border border-border/70 bg-background/60 p-3">
+              <div className="flex items-start gap-3">
+                <Checkbox
+                  id="accept-privacy"
+                  checked={acceptedPrivacy}
+                  onCheckedChange={(checked) => {
+                    const accepted = Boolean(checked);
+                    setAcceptedPrivacy(accepted);
+                    if (accepted) {
+                      setTermsError("");
+                    }
+                  }}
+                  className="mt-0.5"
+                />
+                <div className="space-y-1">
+                  <Label htmlFor="accept-privacy" className="text-xs leading-relaxed">
+                    I have read the MeatLens Privacy Policy.
+                  </Label>
+                  <Button
+                    type="button"
+                    variant="link"
+                    className="h-auto p-0 text-xs"
+                    onClick={() => setShowPrivacyDialog(true)}
+                  >
+                    View Privacy Policy
+                  </Button>
+                </div>
+              </div>
+            </div>
             <Button type="submit" className="w-full font-display uppercase tracking-wider" disabled={loading}>
               {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : "Create Account"}
             </Button>
@@ -152,6 +189,7 @@ const SignupPage = () => {
         </CardContent>
       </Card>
       <TermsAndConditionsDialog open={showTermsDialog} onOpenChange={setShowTermsDialog} />
+      <PrivacyPolicyDialog open={showPrivacyDialog} onOpenChange={setShowPrivacyDialog} />
     </div>
   );
 };

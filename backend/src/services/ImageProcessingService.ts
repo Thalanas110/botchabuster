@@ -1,5 +1,5 @@
 import sharp from "sharp";
-import cv from "@techstark/opencv-js";
+import { getOpenCv } from "../integrations/opencv";
 
 export interface ImageQualityAssessment {
   accepted: boolean;
@@ -83,6 +83,7 @@ export class ImageProcessingService {
     region?: { x: number; y: number; width: number; height: number };
     whitePoint?: { r: number; g: number; b: number };
   }> {
+    const cv = await getOpenCv() as any;
     const { data, info } = await sharp(imagePath)
       .ensureAlpha()
       .raw()
@@ -163,6 +164,7 @@ export class ImageProcessingService {
   // Segments the meat area from the background using Lab color range,
   // then cleans up the mask with morphological open/close operations.
   async extractMeatROI(imagePath: string): Promise<Buffer> {
+    const cv = await getOpenCv() as any;
     const { data, info } = await sharp(imagePath)
       .ensureAlpha()
       .raw()

@@ -5,6 +5,7 @@ import { TextureAnalysisService } from "../services/TextureAnalysisService";
 import { ClassificationService } from "../services/ClassificationService";
 import { CalibrationService } from "../services/CalibrationService";
 import { InspectionResult } from "../models/InspectionResult";
+import { isOpenCvRuntimeError } from "../integrations/opencv";
 
 export class AnalysisController {
   private imageService: ImageProcessingService;
@@ -94,6 +95,15 @@ export class AnalysisController {
 
       res.json(result.toJSON());
     } catch (error) {
+      if (isOpenCvRuntimeError(error)) {
+        console.error("Analysis dependency unavailable:", error instanceof Error ? error.message : String(error));
+        res.status(503).json({
+          error: "Analysis temporarily unavailable",
+          message: "OpenCV runtime failed to initialize on this server.",
+        });
+        return;
+      }
+
       console.error("Analysis error:", error);
       res.status(500).json({
         error: "Analysis failed",
@@ -110,8 +120,8 @@ export class AnalysisController {
       status: "ok",
       timestamp: new Date().toISOString(),
       services: {
-        imageProcessing: "ready",
-        colorAnalysis: "ready",
+        imageProcessing: "deferred",
+        colorAnalysis: "deferred",
         textureAnalysis: "ready",
         classification: "ready",
       },

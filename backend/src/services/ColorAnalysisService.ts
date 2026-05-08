@@ -1,5 +1,5 @@
 import sharp from 'sharp';
-import cv from '@techstark/opencv-js';
+import { getOpenCv } from "../integrations/opencv";
 
 export interface LabValues {
   l: number; // Lightness (0-100)
@@ -20,6 +20,7 @@ export class ColorAnalysisService {
   }
 
   async extractLabValues(imageBuffer: Buffer): Promise<LabValues> {
+    const cv = await getOpenCv() as any;
     const { data, info } = await sharp(imageBuffer)
       .ensureAlpha()
       .raw()

@@ -17,6 +17,35 @@ import auditLogRoutes from "./routes/auditLogs";
 
 const config = Config.getInstance();
 const app = express();
+const fatalHandlerFlag = "__meatlensFatalHandlersInstalled";
+
+function formatFatalError(error: unknown): string {
+  if (error instanceof Error) {
+    return `${error.name}: ${error.message}`;
+  }
+  return String(error);
+}
+
+function installFatalHandlers(): void {
+  const processWithFlag = process as NodeJS.Process & Record<string, unknown>;
+  if (processWithFlag[fatalHandlerFlag]) {
+    return;
+  }
+
+  processWithFlag[fatalHandlerFlag] = true;
+
+  process.on("uncaughtException", (error) => {
+    console.error(`[Fatal] Uncaught exception: ${formatFatalError(error)}`);
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    console.error(`[Fatal] Unhandled rejection: ${formatFatalError(reason)}`);
+    process.exit(1);
+  });
+}
+
+installFatalHandlers();
 
 // Ensure upload directory exists
 if (!fs.existsSync(config.uploadDir)) {

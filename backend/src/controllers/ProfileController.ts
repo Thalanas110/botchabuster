@@ -238,31 +238,32 @@ export class ProfileController {
       }
 
       await profileService.deleteUserByAdmin(id);
+
+      const actor = await this.resolveActor(req);
+      if (actor) {
+        await auditLogService.write({
+          payload: {
+            event_type: "admin.user.delete",
+            event_time: new Date().toISOString(),
+            actor: {
+              id: actor.id,
+              role: actor.role,
+            },
+            source: {
+              ip: req.ip || null,
+              user_agent: req.header("user-agent") || null,
+            },
+            data: {
+              user_id: id,
+            },
+          },
+        });
+      }
+
       res.status(204).send();
     } catch (error) {
       console.error("Delete user by admin error:", error);
       res.status(500).json({ error: error instanceof Error ? error.message : "Failed to delete user" });
     }
-
-        const actor = await this.resolveActor(req);
-        if (actor) {
-          await auditLogService.write({
-            payload: {
-              event_type: "admin.user.delete",
-              event_time: new Date().toISOString(),
-              actor: {
-                id: actor.id,
-                role: actor.role,
-              },
-              source: {
-                ip: req.ip || null,
-                user_agent: req.header("user-agent") || null,
-              },
-              data: {
-                user_id: id,
-              },
-            },
-          });
-        }
   }
 }

@@ -34,6 +34,7 @@ import {
   UserPlus,
   Pencil,
   MapPin,
+  FileBarChart2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfDay, endOfDay, isAfter } from "date-fns";
@@ -90,6 +91,7 @@ const tabs = [
   { key: "inspections" as const, label: "Inspections", icon: ClipboardList },
   { key: "codes" as const, label: "Access Codes", icon: KeyRound },
   { key: "markets" as const, label: "Markets", icon: MapPin },
+  { key: "reports" as const, label: "Reports", icon: FileBarChart2 },
 ];
 
 const getInspectorLabel = (profile?: Profile) =>
@@ -126,7 +128,7 @@ const AdminDashboard = () => {
   const [marketLocations, setMarketLocations] = useState<MarketLocation[]>([]);
   const [stats, setStats] = useState<{ total_users: number; total_inspections: number; roles: RoleStat[] | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets" | "reports">("overview");
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
   const [newMarketName, setNewMarketName] = useState("");
@@ -1097,63 +1099,6 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-border/70 bg-background/50 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Generate Reports</p>
-                <p className="text-sm text-foreground/90">Build PDF summary, CSV detail, or JSON snapshot for a selected date range.</p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {reportRows.length} inspection{reportRows.length !== 1 ? "s" : ""} in range
-              </p>
-            </div>
-
-            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-              <div className="space-y-1">
-                <Label htmlFor="report-start-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                  Start Date
-                </Label>
-                <Input
-                  id="report-start-date"
-                  type="date"
-                  value={reportStartDate}
-                  onChange={(event) => setReportStartDate(event.target.value)}
-                  className="h-10 rounded-xl"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="report-end-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                  End Date
-                </Label>
-                <Input
-                  id="report-end-date"
-                  type="date"
-                  value={reportEndDate}
-                  onChange={(event) => setReportEndDate(event.target.value)}
-                  className="h-10 rounded-xl"
-                />
-              </div>
-              <div className="flex flex-col gap-2 self-end sm:flex-row lg:justify-end">
-                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportPDF}>
-                  <Download className="h-4 w-4" />
-                  PDF Summary
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportCSV}>
-                  <Download className="h-4 w-4" />
-                  CSV Detail
-                </Button>
-                <Button type="button" size="sm" className="gap-2 rounded-xl" onClick={handleExportJSON}>
-                  <Download className="h-4 w-4" />
-                  JSON Snapshot
-                </Button>
-              </div>
-            </div>
-
-            {reportDateRangeInvalid && (
-              <p className="mt-2 text-xs text-destructive">Start date must be on or before end date.</p>
-            )}
-          </div>
-
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Users</p>
@@ -1945,6 +1890,101 @@ const AdminDashboard = () => {
                           </div>
                         </div>
                       ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "reports" && (
+            <div className="mt-6 grid min-w-0 gap-4 xl:grid-cols-[1fr_1fr]">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="font-display text-sm uppercase tracking-wider">Generate Reports</CardTitle>
+                  <CardDescription className="text-xs">
+                    Build PDF summary, CSV detail, or JSON snapshot for a selected date range.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="report-start-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                        Start Date
+                      </Label>
+                      <Input
+                        id="report-start-date"
+                        type="date"
+                        value={reportStartDate}
+                        onChange={(event) => setReportStartDate(event.target.value)}
+                        className="h-10 rounded-xl"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="report-end-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                        End Date
+                      </Label>
+                      <Input
+                        id="report-end-date"
+                        type="date"
+                        value={reportEndDate}
+                        onChange={(event) => setReportEndDate(event.target.value)}
+                        className="h-10 rounded-xl"
+                      />
+                    </div>
+                  </div>
+
+                  {reportDateRangeInvalid && (
+                    <p className="text-xs text-destructive">Start date must be on or before end date.</p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    {reportRows.length} inspection{reportRows.length !== 1 ? "s" : ""} in range
+                  </p>
+
+                  <div className="flex flex-col gap-2 sm:flex-row">
+                    <Button type="button" variant="outline" className="flex-1 gap-2 rounded-xl" onClick={handleExportPDF}>
+                      <Download className="h-4 w-4" />
+                      PDF Summary
+                    </Button>
+                    <Button type="button" variant="outline" className="flex-1 gap-2 rounded-xl" onClick={handleExportCSV}>
+                      <Download className="h-4 w-4" />
+                      CSV Detail
+                    </Button>
+                    <Button type="button" className="flex-1 gap-2 rounded-xl" onClick={handleExportJSON}>
+                      <Download className="h-4 w-4" />
+                      JSON Snapshot
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="font-display text-sm uppercase tracking-wider">Report Summary</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {reportRows.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">
+                      No inspections found for the selected range. Adjust the date filter above.
+                    </p>
+                  ) : (
+                    <div className="grid gap-3 sm:grid-cols-2">
+                      <div className="rounded-xl border border-border/70 bg-[hsl(var(--primary)/0.14)] p-3">
+                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Inspections</p>
+                        <p className="mt-1 font-display text-2xl font-semibold">{reportSummary.total}</p>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-background/65 p-3">
+                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Avg Confidence</p>
+                        <p className="mt-1 font-display text-2xl font-semibold">{reportSummary.averageConfidence}%</p>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-background/65 p-3">
+                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Rate</p>
+                        <p className="mt-1 font-display text-2xl font-semibold">{reportSummary.spoiledRate}%</p>
+                      </div>
+                      <div className="rounded-xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
+                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Fresh</p>
+                        <p className="mt-1 font-display text-2xl font-semibold">{reportClassCounts.fresh}</p>
+                      </div>
                     </div>
                   )}
                 </CardContent>

@@ -34,6 +34,7 @@ import {
   UserPlus,
   Pencil,
   MapPin,
+  FileBarChart2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfDay, endOfDay, isAfter } from "date-fns";
@@ -90,6 +91,7 @@ const tabs = [
   { key: "inspections" as const, label: "Inspections", icon: ClipboardList },
   { key: "codes" as const, label: "Access Codes", icon: KeyRound },
   { key: "markets" as const, label: "Markets", icon: MapPin },
+  { key: "reports" as const, label: "Reports", icon: FileBarChart2 },
 ];
 
 const getInspectorLabel = (profile?: Profile) =>
@@ -126,7 +128,7 @@ const AdminDashboard = () => {
   const [marketLocations, setMarketLocations] = useState<MarketLocation[]>([]);
   const [stats, setStats] = useState<{ total_users: number; total_inspections: number; roles: RoleStat[] | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets" | "reports">("overview");
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
   const [newMarketName, setNewMarketName] = useState("");
@@ -1054,63 +1056,6 @@ const AdminDashboard = () => {
             </div>
           </div>
 
-          <div className="mt-4 rounded-2xl border border-border/70 bg-background/50 p-3">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div>
-                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Generate Reports</p>
-                <p className="text-sm text-foreground/90">Build PDF summary, CSV detail, or JSON snapshot for a selected date range.</p>
-              </div>
-              <p className="text-xs text-muted-foreground">
-                {reportRows.length} inspection{reportRows.length !== 1 ? "s" : ""} in range
-              </p>
-            </div>
-
-            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-              <div className="space-y-1">
-                <Label htmlFor="report-start-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                  Start Date
-                </Label>
-                <Input
-                  id="report-start-date"
-                  type="date"
-                  value={reportStartDate}
-                  onChange={(event) => setReportStartDate(event.target.value)}
-                  className="h-10 rounded-xl"
-                />
-              </div>
-              <div className="space-y-1">
-                <Label htmlFor="report-end-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                  End Date
-                </Label>
-                <Input
-                  id="report-end-date"
-                  type="date"
-                  value={reportEndDate}
-                  onChange={(event) => setReportEndDate(event.target.value)}
-                  className="h-10 rounded-xl"
-                />
-              </div>
-              <div className="flex flex-col gap-2 self-end sm:flex-row lg:justify-end">
-                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportPDF}>
-                  <Download className="h-4 w-4" />
-                  PDF Summary
-                </Button>
-                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportCSV}>
-                  <Download className="h-4 w-4" />
-                  CSV Detail
-                </Button>
-                <Button type="button" size="sm" className="gap-2 rounded-xl" onClick={handleExportJSON}>
-                  <Download className="h-4 w-4" />
-                  JSON Snapshot
-                </Button>
-              </div>
-            </div>
-
-            {reportDateRangeInvalid && (
-              <p className="mt-2 text-xs text-destructive">Start date must be on or before end date.</p>
-            )}
-          </div>
-
           <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
             <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
               <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Users</p>
@@ -1960,6 +1905,87 @@ const AdminDashboard = () => {
         variant="destructive"
         onConfirm={confirmDeleteMarket}
       />
+
+      {activeTab === "reports" && (
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/90 p-4">
+          <h2 className="font-display text-xl font-semibold uppercase tracking-wider">Generate Reports</h2>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Build PDF summary, CSV detail, or JSON snapshot for a selected date range.
+          </p>
+
+          <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+            <div className="space-y-1">
+              <Label htmlFor="report-start-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                Start Date
+              </Label>
+              <Input
+                id="report-start-date"
+                type="date"
+                value={reportStartDate}
+                onChange={(event) => setReportStartDate(event.target.value)}
+                className="h-10 rounded-xl"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="report-end-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                End Date
+              </Label>
+              <Input
+                id="report-end-date"
+                type="date"
+                value={reportEndDate}
+                onChange={(event) => setReportEndDate(event.target.value)}
+                className="h-10 rounded-xl"
+              />
+            </div>
+            <div className="flex flex-col gap-2 self-end sm:flex-row lg:justify-end">
+              <Button type="button" variant="outline" className="gap-2 rounded-xl" onClick={handleExportPDF}>
+                <Download className="h-4 w-4" />
+                PDF Summary
+              </Button>
+              <Button type="button" variant="outline" className="gap-2 rounded-xl" onClick={handleExportCSV}>
+                <Download className="h-4 w-4" />
+                CSV Detail
+              </Button>
+              <Button type="button" className="gap-2 rounded-xl" onClick={handleExportJSON}>
+                <Download className="h-4 w-4" />
+                JSON Snapshot
+              </Button>
+            </div>
+          </div>
+
+          {reportDateRangeInvalid && (
+            <p className="mt-2 text-xs text-destructive">Start date must be on or before end date.</p>
+          )}
+          <p className="mt-3 text-xs text-muted-foreground">
+            {reportRows.length} inspection{reportRows.length !== 1 ? "s" : ""} in range
+          </p>
+
+          {reportRows.length > 0 && (
+            <div className="mt-6 rounded-2xl border border-border/70 bg-background/50 p-4">
+              <h3 className="mb-3 font-display text-sm font-semibold uppercase tracking-wider">Report Preview</h3>
+              <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+                <div className="rounded-xl border border-border/70 bg-[hsl(var(--primary)/0.14)] p-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Inspections</p>
+                  <p className="mt-1 font-display text-2xl font-semibold">{reportSummary.total}</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/65 p-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Avg Confidence</p>
+                  <p className="mt-1 font-display text-2xl font-semibold">{reportSummary.averageConfidence}%</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-background/65 p-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Rate</p>
+                  <p className="mt-1 font-display text-2xl font-semibold">{reportSummary.spoiledRate}%</p>
+                </div>
+                <div className="rounded-xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Fresh</p>
+                  <p className="mt-1 font-display text-2xl font-semibold">{reportClassCounts.fresh}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </section>
+      )}
     </div>
   );
 };

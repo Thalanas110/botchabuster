@@ -6,8 +6,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
-import { useIsDesktop } from "@/hooks/use-desktop";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { profileClient, type Profile } from "@/integrations/api/ProfileClient";
 import { inspectionClient } from "@/integrations/api/InspectionClient";
 import { accessCodeClient, type AccessCode } from "@/integrations/api/AccessCodeClient";
@@ -83,7 +84,7 @@ const UNKNOWN_INSPECTOR_LABEL = "Unknown Inspector";
 const UNSPECIFIED_LOCATION_LABEL = "Unspecified";
 const REPORT_CLASSIFICATIONS: FreshnessClassification[] = ["fresh", "not fresh", "acceptable", "warning", "spoiled"];
 
-const sidebarTabs = [
+const tabs = [
   { key: "overview" as const, label: "Overview", icon: LayoutGrid },
   { key: "users" as const, label: "Users", icon: Users },
   { key: "inspections" as const, label: "Inspections", icon: ClipboardList },
@@ -116,8 +117,9 @@ const toCsvValue = (value: unknown): string => {
   return raw;
 };
 
-const DesktopAdminDashboard = () => {
+const AdminDashboard = () => {
   const { user } = useAuth();
+  const isMobile = useIsMobile();
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [inspections, setInspections] = useState<Inspection[]>([]);
   const [accessCodes, setAccessCodes] = useState<AccessCode[]>([]);
@@ -1021,656 +1023,917 @@ const DesktopAdminDashboard = () => {
 
   if (loading) {
     return (
-      <div className="flex h-screen items-center justify-center">
+      <div className="flex min-h-screen items-center justify-center">
         <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
-  const activeTabConfig = sidebarTabs.find((tab) => tab.key === activeTab) ?? sidebarTabs[0];
+  const activeTabConfig = tabs.find((tab) => tab.key === activeTab) ?? tabs[0];
+  const ActiveTabIcon = activeTabConfig.icon;
 
   return (
-    <div className="flex h-screen overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))]">
-      <aside className="w-60 flex-shrink-0 border-r border-border/70 bg-card/95">
-        <div className="flex h-16 items-center border-b border-border/70 px-4">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-[hsl(var(--primary)/0.15)]">
-            <ShieldCheck className="h-5 w-5 text-primary" />
+    <div className="flex h-screen flex-col overflow-hidden bg-[radial-gradient(circle_at_top_left,hsl(var(--primary)/0.16),transparent_42%),linear-gradient(180deg,hsl(var(--background)),hsl(var(--background)))]">
+      <div className="flex flex-1 overflow-hidden">
+        <aside className="w-60 flex-shrink-0 border-r border-border/70 bg-card/95">
+          <div className="flex h-16 items-center border-b border-border/70 px-4">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-[hsl(var(--primary)/0.15)]">
+              <ShieldCheck className="h-5 w-5 text-primary" />
+            </div>
+            <span className="ml-3 font-display text-base font-semibold tracking-tight">Admin</span>
           </div>
-          <span className="ml-3 font-display text-base font-semibold tracking-tight">Admin</span>
-        </div>
-        <nav className="flex flex-col gap-1 p-3">
-          {sidebarTabs.map(({ key, label, icon: Icon }) => (
-            <button
-              key={key}
-              type="button"
-              onClick={() => setActiveTab(key)}
-              className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
-                activeTab === key
-                  ? "bg-[hsl(var(--primary)/0.16)] text-foreground"
-                  : "text-muted-foreground hover:bg-secondary hover:text-foreground"
-              }`}
-            >
-              <Icon className="h-4 w-4" />
-              <span className="text-sm font-medium">{label}</span>
-            </button>
-          ))}
-        </nav>
-      </aside>
+          <nav className="flex flex-col gap-1 p-3">
+            {tabs.map(({ key, label, icon: Icon }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setActiveTab(key)}
+                className={`flex items-center gap-3 rounded-xl px-3 py-2.5 text-left transition-colors ${
+                  activeTab === key
+                    ? "bg-[hsl(var(--primary)/0.16)] text-foreground"
+                    : "text-muted-foreground hover:bg-secondary hover:text-foreground"
+                }`}
+              >
+                <Icon className="h-4 w-4" />
+                <span className="text-sm font-medium">{label}</span>
+              </button>
+            ))}
+          </nav>
+        </aside>
 
-      <div className="flex flex-1 flex-col overflow-hidden">
-        <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-border/70 bg-card/95 px-6">
-          <div className="flex items-center gap-3">
-            <h1 className="font-display text-xl font-semibold tracking-tight">Admin Dashboard</h1>
-          </div>
-          <div className="flex items-center gap-3">
+        <div className="flex flex-1 flex-col overflow-hidden">
+          <header className="flex h-16 flex-shrink-0 items-center justify-between border-b border-border/70 bg-card/95 px-6">
+            <div className="flex items-center gap-3">
+              <h1 className="font-display text-xl font-semibold tracking-tight">Admin Dashboard</h1>
+            </div>
             <Button variant="outline" size="sm" onClick={() => void loadData()} className="gap-2 rounded-xl">
               <RefreshCcw className="h-4 w-4" />
               Refresh
             </Button>
+          </header>
+
+          <main className="flex-1 overflow-auto p-6 pb-24">
+            <div className="mx-auto w-full max-w-7xl min-w-0 space-y-6">
+              <section className="rounded-3xl border border-border/70 bg-card/90 p-5 shadow-[0_24px_70px_-34px_rgba(0,0,0,0.65)]">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex items-center gap-3">
+              <div className="flex h-11 w-11 items-center justify-center rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.15)]">
+                <ShieldCheck className="h-5 w-5 text-primary" />
+              </div>
+              <div>
+                <h1 className="font-display text-xl font-semibold tracking-tight">Admin Dashboard</h1>
+                <p className="text-xs text-muted-foreground">System management and analytics hub</p>
+              </div>
+            </div>
+            <div className="flex w-full flex-col items-stretch gap-2 min-[420px]:w-auto min-[420px]:flex-row min-[420px]:items-center">
+              <Button variant="outline" size="sm" onClick={() => void loadData()} className="gap-2 rounded-xl">
+                <RefreshCcw className="h-4 w-4" />
+                Refresh
+              </Button>
+            </div>
           </div>
-        </header>
 
-        <main className="flex-1 overflow-auto p-6">
-          <div className="mx-auto max-w-7xl space-y-6">
-            <section className="rounded-3xl border border-border/70 bg-card/90 p-5 shadow-[0_24px_70px_-34px_rgba(0,0,0,0.65)]">
-              <div className="mb-4 rounded-2xl border border-border/70 bg-background/50 p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Generate Reports</p>
-                    <p className="text-sm text-foreground/90">Build PDF summary, CSV detail, or JSON snapshot for a selected date range.</p>
-                  </div>
-                  <p className="text-xs text-muted-foreground">
-                    {reportRows.length} inspection{reportRows.length !== 1 ? "s" : ""} in range
-                  </p>
-                </div>
-
-                <div className="mt-4 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
-                  <div className="space-y-1">
-                    <Label htmlFor="report-start-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                      Start Date
-                    </Label>
-                    <Input
-                      id="report-start-date"
-                      type="date"
-                      value={reportStartDate}
-                      onChange={(event) => setReportStartDate(event.target.value)}
-                      className="h-10 rounded-xl"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <Label htmlFor="report-end-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
-                      End Date
-                    </Label>
-                    <Input
-                      id="report-end-date"
-                      type="date"
-                      value={reportEndDate}
-                      onChange={(event) => setReportEndDate(event.target.value)}
-                      className="h-10 rounded-xl"
-                    />
-                  </div>
-                  <div className="flex flex-col gap-2 self-end sm:flex-row lg:justify-end">
-                    <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportPDF}>
-                      <Download className="h-4 w-4" />
-                      PDF Summary
-                    </Button>
-                    <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportCSV}>
-                      <Download className="h-4 w-4" />
-                      CSV Detail
-                    </Button>
-                    <Button type="button" size="sm" className="gap-2 rounded-xl" onClick={handleExportJSON}>
-                      <Download className="h-4 w-4" />
-                      JSON Snapshot
-                    </Button>
-                  </div>
-                </div>
-
-                {reportDateRangeInvalid && (
-                  <p className="mt-2 text-xs text-destructive">Start date must be on or before end date.</p>
-                )}
+          <div className="mt-4 rounded-2xl border border-border/70 bg-background/50 p-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Generate Reports</p>
+                <p className="text-sm text-foreground/90">Build PDF summary, CSV detail, or JSON snapshot for a selected date range.</p>
               </div>
+              <p className="text-xs text-muted-foreground">
+                {reportRows.length} inspection{reportRows.length !== 1 ? "s" : ""} in range
+              </p>
+            </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-                <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-4">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Users</p>
-                  <p className="mt-1 font-display text-3xl font-semibold">{stats?.total_users || 0}</p>
-                </div>
-                <div className="rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.16)] p-4">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Inspections</p>
-                  <p className="mt-1 font-display text-3xl font-semibold">{stats?.total_inspections || 0}</p>
-                </div>
-                <div className="rounded-2xl border border-border/70 bg-background/65 p-4">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Avg Confidence</p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className="font-display text-3xl font-semibold">{avgConfidence}%</p>
-                    <CheckCircle className="h-4 w-4 text-fresh" />
-                  </div>
-                </div>
-                <div className="rounded-2xl border border-border/70 bg-background/65 p-4">
-                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Rate</p>
-                  <div className="mt-1 flex items-center gap-2">
-                    <p className="font-display text-3xl font-semibold">{spoiledRate}%</p>
-                    {spoiledRate > 20 ? <AlertTriangle className="h-4 w-4 text-spoiled" /> : <CheckCircle className="h-4 w-4 text-fresh" />}
-                  </div>
-                </div>
+            <div className="mt-3 grid gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_auto]">
+              <div className="space-y-1">
+                <Label htmlFor="report-start-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  Start Date
+                </Label>
+                <Input
+                  id="report-start-date"
+                  type="date"
+                  value={reportStartDate}
+                  onChange={(event) => setReportStartDate(event.target.value)}
+                  className="h-10 rounded-xl"
+                />
               </div>
-
-              <div className="mt-4 rounded-2xl border border-border/70 bg-background/50 p-4">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground">7-Day Movement vs Previous Week</p>
-                    <p className="font-display text-lg font-semibold">{recentTrend >= 0 ? "+" : ""}{recentTrend}% inspections</p>
-                  </div>
-                  {recentTrend >= 0 ? <TrendingUp className="h-8 w-8 text-fresh" /> : <TrendingDown className="h-8 w-8 text-warning" />}
-                </div>
+              <div className="space-y-1">
+                <Label htmlFor="report-end-date" className="text-[11px] uppercase tracking-widest text-muted-foreground">
+                  End Date
+                </Label>
+                <Input
+                  id="report-end-date"
+                  type="date"
+                  value={reportEndDate}
+                  onChange={(event) => setReportEndDate(event.target.value)}
+                  className="h-10 rounded-xl"
+                />
               </div>
-            </section>
+              <div className="flex flex-col gap-2 self-end sm:flex-row lg:justify-end">
+                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportPDF}>
+                  <Download className="h-4 w-4" />
+                  PDF Summary
+                </Button>
+                <Button type="button" size="sm" variant="outline" className="gap-2 rounded-xl" onClick={handleExportCSV}>
+                  <Download className="h-4 w-4" />
+                  CSV Detail
+                </Button>
+                <Button type="button" size="sm" className="gap-2 rounded-xl" onClick={handleExportJSON}>
+                  <Download className="h-4 w-4" />
+                  JSON Snapshot
+                </Button>
+              </div>
+            </div>
 
-            {activeTab === "overview" && (
-              <>
-                <div className="grid gap-5 xl:grid-cols-[1.2fr_0.8fr]">
-                  <Card className="rounded-3xl border-border/70 bg-card/95">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-display uppercase tracking-wider">Daily Inspections (14 Days)</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                        <AreaChart data={dailyInspections}>
-                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                          <XAxis dataKey="date" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                          <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" />
-                        </AreaChart>
-                      </ChartContainer>
-                    </CardContent>
-                  </Card>
+            {reportDateRangeInvalid && (
+              <p className="mt-2 text-xs text-destructive">Start date must be on or before end date.</p>
+            )}
+          </div>
 
-                  <Card className="rounded-3xl border-border/70 bg-card/95">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-display uppercase tracking-wider">Classification Distribution</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <ChartContainer config={chartConfig} className="h-[280px] w-full">
-                        <PieChart>
-                          <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={100} innerRadius={55} paddingAngle={3}>
-                            {pieData.map((entry, idx) => (
-                              <Cell key={idx} fill={entry.fill} />
-                            ))}
-                          </Pie>
-                          <ChartTooltip content={<ChartTooltipContent />} />
-                        </PieChart>
-                      </ChartContainer>
-                    </CardContent>
-                  </Card>
-                </div>
+          <div className="mt-4 grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+            <div className="rounded-2xl border border-border/70 bg-[hsl(var(--warning)/0.16)] p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Users</p>
+              <p className="mt-1 font-display text-3xl font-semibold">{stats?.total_users || 0}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-[hsl(var(--primary)/0.16)] p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Total Inspections</p>
+              <p className="mt-1 font-display text-3xl font-semibold">{stats?.total_inspections || 0}</p>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/65 p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Avg Confidence</p>
+              <div className="mt-1 flex items-center gap-2">
+                <p className="font-display text-3xl font-semibold">{avgConfidence}%</p>
+                <CheckCircle className="h-4 w-4 text-fresh" />
+              </div>
+            </div>
+            <div className="rounded-2xl border border-border/70 bg-background/65 p-3">
+              <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Rate</p>
+              <div className="mt-1 flex items-center gap-2">
+                <p className="font-display text-3xl font-semibold">{spoiledRate}%</p>
+                {spoiledRate > 20 ? <AlertTriangle className="h-4 w-4 text-spoiled" /> : <CheckCircle className="h-4 w-4 text-fresh" />}
+              </div>
+            </div>
+          </div>
 
-                <Card className="rounded-3xl border-border/70 bg-card/95">
+          <div className="mt-3 rounded-2xl border border-border/70 bg-background/50 p-3">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <p className="text-[11px] uppercase tracking-widest text-muted-foreground">7-Day Movement vs Previous Week</p>
+                <p className="font-display text-lg font-semibold">{recentTrend >= 0 ? "+" : ""}{recentTrend}% inspections</p>
+              </div>
+              {recentTrend >= 0 ? <TrendingUp className="h-8 w-8 text-fresh" /> : <TrendingDown className="h-8 w-8 text-warning" />}
+            </div>
+          </div>
+        </section>
+
+        <section className="mt-4 rounded-3xl border border-border/70 bg-card/85 p-3">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button
+                type="button"
+                className="group flex w-full items-center justify-between rounded-2xl border border-primary/40 bg-[hsl(var(--primary)/0.16)] px-4 py-3 text-left transition-colors hover:bg-[hsl(var(--primary)/0.20)]"
+              >
+                <span className="flex items-center gap-2">
+                  <ActiveTabIcon className="h-4 w-4 text-foreground" />
+                  <span className="font-display text-sm uppercase tracking-wider text-foreground">{activeTabConfig.label}</span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start" className="w-[var(--radix-dropdown-menu-trigger-width)] max-w-[calc(100vw-2rem)] rounded-2xl border-border/70 bg-card/95 p-1">
+              {tabs.map(({ key, label, icon: Icon }) => (
+                <DropdownMenuItem
+                  key={key}
+                  onSelect={() => setActiveTab(key)}
+                  className={`flex items-center gap-2 rounded-xl px-3 py-2 font-display text-xs uppercase tracking-wider ${
+                    activeTab === key ? "bg-[hsl(var(--primary)/0.16)] text-foreground" : "text-muted-foreground"
+                  }`}
+                >
+                  <Icon className="h-4 w-4" />
+                  {label}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </section>
+
+        <div className="mt-4 space-y-4">
+          {activeTab === "overview" && (
+            <>
+              <div className="grid min-w-0 gap-4 xl:grid-cols-[1.2fr_0.8fr]">
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                   <CardHeader>
-                    <CardTitle className="text-sm font-display uppercase tracking-wider">Classification Breakdown</CardTitle>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Daily Inspections (14 Days)</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    {(["fresh", "not fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => {
-                      const count = classificationCounts[c] || 0;
-                      const pct = inspections.length > 0 ? (count / inspections.length) * 100 : 0;
-                      return (
-                        <div key={c}>
-                          <div className="mb-1 flex items-center justify-between">
-                            <span className="font-display text-xs uppercase tracking-wider">{c}</span>
-                            <span className="font-display text-xs text-muted-foreground">{count} ({pct.toFixed(0)}%)</span>
-                          </div>
-                          <div className="h-2.5 w-full overflow-hidden rounded-full bg-secondary">
-                            <div className={`h-full rounded-full transition-all ${classColors[c]}`} style={{ width: `${pct}%` }} />
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <CardContent>
+                    <ChartContainer config={chartConfig} className="h-[260px] w-full min-w-0">
+                      <AreaChart data={dailyInspections}>
+                        <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                        <XAxis dataKey="date" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                        <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                        <Area type="monotone" dataKey="count" stroke="hsl(var(--primary))" fill="hsl(var(--primary) / 0.2)" />
+                      </AreaChart>
+                    </ChartContainer>
                   </CardContent>
                 </Card>
 
-                {stats?.roles && (
-                  <Card className="rounded-3xl border-border/70 bg-card/95">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-display uppercase tracking-wider">Users by Role</CardTitle>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-4 sm:grid-cols-3">
-                        {stats.roles.map((r) => (
-                          <div key={r.role} className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                            <p className="text-[11px] uppercase tracking-widest text-muted-foreground">{r.role}</p>
-                            <p className="mt-1 font-display text-3xl font-semibold">{r.count}</p>
-                          </div>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Classification Distribution</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ChartContainer config={chartConfig} className="h-[260px] w-full min-w-0">
+                      <PieChart>
+                        <Pie data={pieData} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={90} innerRadius={50} paddingAngle={3}>
+                          {pieData.map((entry, idx) => (
+                            <Cell key={idx} fill={entry.fill} />
+                          ))}
+                        </Pie>
+                        <ChartTooltip content={<ChartTooltipContent />} />
+                      </PieChart>
+                    </ChartContainer>
+                  </CardContent>
+                </Card>
+              </div>
 
-                <section className="space-y-5">
-                  <div className="rounded-3xl border border-border/70 bg-card/95 p-5">
-                    <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Business Analytics</p>
-                    <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">Operational trends and risk hotspots</h2>
-                    <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
-                      Compare inspector output, product mix, location risk, and day-by-day quality shifts without leaving the overview.
-                    </p>
-                  </div>
-
-                  <Card className="rounded-3xl border-border/70 bg-card/95">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-display uppercase tracking-wider">Inspector Performance</CardTitle>
-                      <CardDescription>Track who is handling the most inspections and how confidently those results are being recorded.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-5 xl:grid-cols-2">
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Top Inspectors by Inspection Volume</p>
-                        {inspectorAnalytics.length > 0 ? (
-                          <ChartContainer config={chartConfig} className="mt-4 h-[240px] w-full">
-                            <BarChart data={inspectorAnalytics} layout="vertical" margin={{ left: 12, right: 12 }}>
-                              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <YAxis
-                                type="category"
-                                dataKey="inspector"
-                                width={100}
-                                tick={{ fontSize: 11 }}
-                                tickFormatter={truncateChartLabel}
-                                className="fill-muted-foreground"
-                              />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                              <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="hsl(var(--primary))" />
-                            </BarChart>
-                          </ChartContainer>
-                        ) : (
-                          <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
-                        )}
-                      </div>
-
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Average Confidence by Inspector</p>
-                        {inspectorAnalytics.length > 0 ? (
-                          <ChartContainer config={chartConfig} className="mt-4 h-[240px] w-full">
-                            <BarChart data={inspectorAnalytics} layout="vertical" margin={{ left: 12, right: 12 }}>
-                              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <YAxis
-                                type="category"
-                                dataKey="inspector"
-                                width={100}
-                                tick={{ fontSize: 11 }}
-                                tickFormatter={truncateChartLabel}
-                                className="fill-muted-foreground"
-                              />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                              <Bar dataKey="confidence" radius={[0, 8, 8, 0]} fill="hsl(var(--warning))" />
-                            </BarChart>
-                          </ChartContainer>
-                        ) : (
-                          <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-3xl border-border/70 bg-card/95">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-display uppercase tracking-wider">Meat Type Trends</CardTitle>
-                      <CardDescription>Separate product throughput from spoilage risk to see which categories need more attention.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-5 xl:grid-cols-2">
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Inspections by Meat Type</p>
-                        {meatTypeAnalytics.length > 0 ? (
-                          <ChartContainer config={chartConfig} className="mt-4 h-[240px] w-full">
-                            <BarChart data={meatTypeAnalytics}>
-                              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                              <XAxis dataKey="meatType" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                              <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="hsl(var(--primary))" />
-                            </BarChart>
-                          </ChartContainer>
-                        ) : (
-                          <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
-                        )}
-                      </div>
-
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Rate by Meat Type</p>
-                        {meatTypeAnalytics.length > 0 ? (
-                          <ChartContainer config={chartConfig} className="mt-4 h-[240px] w-full">
-                            <BarChart data={meatTypeAnalytics}>
-                              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                              <XAxis dataKey="meatType" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                              <Bar dataKey="spoiledRate" radius={[8, 8, 0, 0]} fill={PIE_COLORS.spoiled} />
-                            </BarChart>
-                          </ChartContainer>
-                        ) : (
-                          <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-3xl border-border/70 bg-card/95">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-display uppercase tracking-wider">Location Trends</CardTitle>
-                      <CardDescription>
-                        Blank inspection and profile locations roll up under {UNSPECIFIED_LOCATION_LABEL} so missing routing data still surfaces in the overview.
-                      </CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-5 xl:grid-cols-2">
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Top Locations by Inspection Count</p>
-                        {locationAnalytics.length > 0 ? (
-                          <ChartContainer config={chartConfig} className="mt-4 h-[240px] w-full">
-                            <BarChart data={locationAnalytics} layout="vertical" margin={{ left: 12, right: 12 }}>
-                              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                              <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <YAxis
-                                type="category"
-                                dataKey="location"
-                                width={100}
-                                tick={{ fontSize: 11 }}
-                                tickFormatter={truncateChartLabel}
-                                className="fill-muted-foreground"
-                              />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                              <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="hsl(var(--primary))" />
-                            </BarChart>
-                          </ChartContainer>
-                        ) : (
-                          <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
-                        )}
-                      </div>
-
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Share by Location</p>
-                        {locationAnalytics.length > 0 ? (
-                          <ChartContainer config={chartConfig} className="mt-4 h-[240px] w-full">
-                            <BarChart data={locationAnalytics} layout="vertical" margin={{ left: 12, right: 12 }}>
-                              <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                              <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                              <YAxis
-                                type="category"
-                                dataKey="location"
-                                width={100}
-                                tick={{ fontSize: 11 }}
-                                tickFormatter={truncateChartLabel}
-                                className="fill-muted-foreground"
-                              />
-                              <ChartTooltip content={<ChartTooltipContent />} />
-                              <Bar dataKey="spoiledRate" radius={[0, 8, 8, 0]} fill={PIE_COLORS.spoiled} />
-                            </BarChart>
-                          </ChartContainer>
-                        ) : (
-                          <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
-                        )}
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card className="rounded-3xl border-border/70 bg-card/95">
-                    <CardHeader>
-                      <CardTitle className="text-sm font-display uppercase tracking-wider">Quality Signals</CardTitle>
-                      <CardDescription>Follow day-by-day confidence stability and how the freshness mix shifts across the recent inspection window.</CardDescription>
-                    </CardHeader>
-                    <CardContent className="grid gap-5 xl:grid-cols-2">
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Average Confidence Trend</p>
-                        <ChartContainer config={chartConfig} className="mt-4 h-[240px] w-full">
-                          <AreaChart data={confidenceTrendData}>
-                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                            <XAxis dataKey="date" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <Area type="monotone" dataKey="confidence" stroke="hsl(var(--warning))" fill="hsl(var(--warning) / 0.18)" />
-                          </AreaChart>
-                        </ChartContainer>
-                      </div>
-
-                      <div className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                        <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
-                          <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Freshness Mix by Day</p>
-                          <div className="flex flex-wrap gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.fresh }} />Fresh</span>
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS["not fresh"] }} />Not Fresh</span>
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.acceptable }} />Acceptable</span>
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.warning }} />Warning</span>
-                            <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.spoiled }} />Spoiled</span>
-                          </div>
+              <Card className="rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="text-sm font-display uppercase tracking-wider">Classification Breakdown</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {(["fresh", "not fresh", "acceptable", "warning", "spoiled"] as FreshnessClassification[]).map((c) => {
+                    const count = classificationCounts[c] || 0;
+                    const pct = inspections.length > 0 ? (count / inspections.length) * 100 : 0;
+                    return (
+                      <div key={c}>
+                        <div className="mb-1 flex items-center justify-between">
+                          <span className="font-display text-xs uppercase tracking-wider">{c}</span>
+                          <span className="font-display text-xs text-muted-foreground">{count} ({pct.toFixed(0)}%)</span>
                         </div>
-                        <ChartContainer config={chartConfig} className="h-[220px] w-full">
-                          <BarChart data={freshnessMixData}>
-                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
-                            <XAxis dataKey="date" tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
-                            <ChartTooltip content={<ChartTooltipContent />} />
-                            <Bar dataKey="fresh" stackId="freshness" fill={PIE_COLORS.fresh} />
-                            <Bar dataKey="notFresh" stackId="freshness" fill={PIE_COLORS["not fresh"]} />
-                            <Bar dataKey="acceptable" stackId="freshness" fill={PIE_COLORS.acceptable} />
-                            <Bar dataKey="warning" stackId="freshness" fill={PIE_COLORS.warning} />
-                            <Bar dataKey="spoiled" stackId="freshness" fill={PIE_COLORS.spoiled} radius={[6, 6, 0, 0]} />
-                          </BarChart>
-                        </ChartContainer>
+                        <div className="h-2 w-full overflow-hidden rounded-full bg-secondary">
+                          <div className={`h-full rounded-full transition-all ${classColors[c]}`} style={{ width: `${pct}%` }} />
+                        </div>
                       </div>
-                    </CardContent>
-                  </Card>
-                </section>
-              </>
-            )}
+                    );
+                  })}
+                </CardContent>
+              </Card>
 
-            {activeTab === "users" && (
-              <div className="grid gap-5 xl:grid-cols-[0.95fr_1.05fr]">
+              {stats?.roles && (
                 <Card className="rounded-3xl border-border/70 bg-card/95">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
-                      <UserPlus className="h-4 w-4" />
-                      {editingUserId ? "Edit User" : "Add User"}
-                    </CardTitle>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Users by Role</CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">Full Name</Label>
-                      <Input
-                        value={userForm.full_name}
-                        onChange={(e) => setUserForm((prev) => ({ ...prev, full_name: e.target.value }))}
-                        placeholder="Juan dela Cruz"
-                        className="h-10 rounded-xl"
-                      />
+                  <CardContent>
+                    <div className="grid gap-3 sm:grid-cols-3">
+                      {stats.roles.map((r) => (
+                        <div key={r.role} className="rounded-2xl border border-border/70 bg-background/50 p-3">
+                          <p className="text-[11px] uppercase tracking-widest text-muted-foreground">{r.role}</p>
+                          <p className="mt-1 font-display text-2xl font-semibold">{r.count}</p>
+                        </div>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
+              <section className="space-y-4">
+                <div className="rounded-3xl border border-border/70 bg-card/95 p-4">
+                  <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Business Analytics</p>
+                  <h2 className="mt-1 font-display text-xl font-semibold tracking-tight">Operational trends and risk hotspots</h2>
+                  <p className="mt-2 max-w-3xl text-sm text-muted-foreground">
+                    Compare inspector output, product mix, location risk, and day-by-day quality shifts without leaving the overview.
+                  </p>
+                </div>
+
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Inspector Performance</CardTitle>
+                    <CardDescription>Track who is handling the most inspections and how confidently those results are being recorded.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Top Inspectors by Inspection Volume</p>
+                      {inspectorAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={inspectorAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="inspector" {...mobileCategoryAxisProps} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="inspector"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="hsl(var(--primary))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
                     </div>
 
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">Email</Label>
-                      <Input
-                        type="email"
-                        value={userForm.email}
-                        onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
-                        placeholder="inspector@example.com"
-                        className="h-10 rounded-xl"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">
-                        {editingUserId ? "New Password (Optional)" : "Password"}
-                      </Label>
-                      <Input
-                        type="password"
-                        value={userForm.password}
-                        onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
-                        placeholder={editingUserId ? "Leave blank to keep current password" : "At least 6 characters"}
-                        className="h-10 rounded-xl"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">Inspector Code</Label>
-                      <Input
-                        value={userForm.inspector_code}
-                        onChange={(e) => setUserForm((prev) => ({ ...prev, inspector_code: e.target.value }))}
-                        placeholder="INSPECTOR-2026"
-                        className="h-10 rounded-xl font-display tracking-wider"
-                      />
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">Location</Label>
-                      <Input
-                        value={userForm.location}
-                        onChange={(e) => setUserForm((prev) => ({ ...prev, location: e.target.value }))}
-                        placeholder="Quezon City"
-                        className="h-10 rounded-xl"
-                      />
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 pt-1">
-                      <Button
-                        size="sm"
-                        onClick={() => void handleSubmitUserForm()}
-                        className="h-10 rounded-xl gap-1"
-                        disabled={isSavingUser}
-                      >
-                        {isSavingUser ? <Loader2 className="h-4 w-4 animate-spin" /> : editingUserId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
-                        {editingUserId ? "Save Changes" : "Create User"}
-                      </Button>
-                      {editingUserId && (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          onClick={resetUserForm}
-                          className="h-10 rounded-xl"
-                          disabled={isSavingUser}
-                        >
-                          Cancel Edit
-                        </Button>
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Average Confidence by Inspector</p>
+                      {inspectorAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={inspectorAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="inspector" {...mobileCategoryAxisProps} />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="inspector"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="confidence" radius={[0, 8, 8, 0]} fill="hsl(var(--warning))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
                       )}
                     </div>
                   </CardContent>
                 </Card>
 
-                <Card className="rounded-3xl border-border/70 bg-card/95">
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                   <CardHeader>
-                    <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
-                      <Users className="h-4 w-4" />
-                      Registered Users
-                    </CardTitle>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Meat Type Trends</CardTitle>
+                    <CardDescription>Separate product throughput from spoilage risk to see which categories need more attention.</CardDescription>
                   </CardHeader>
-                  <CardContent>
-                    {profiles.length === 0 ? (
-                      <p className="py-8 text-center text-sm text-muted-foreground">No users found</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {profiles.map((p) => (
-                          <div key={p.id} className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                            <div className="flex items-start justify-between gap-2">
-                              <div className="min-w-0 flex-1">
-                                <p className="truncate font-display text-base font-semibold">{p.full_name || "Unnamed"}</p>
-                                <p className="truncate text-xs text-muted-foreground">{p.email || "No email"}</p>
-                              </div>
-                              <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
-                                {p.id === user?.id ? "You" : "User"}
-                              </span>
-                            </div>
-                            <div className="mt-3 space-y-1 text-xs text-muted-foreground">
-                              <p>Joined: {format(new Date(p.created_at), "MMM d, yyyy")}</p>
-                              <p>Location: {p.location || "No location"}</p>
-                              <p className="break-all">Inspector Code: {p.inspector_code || "N/A"}</p>
-                            </div>
-                            <div className="mt-3 flex flex-wrap items-center gap-2">
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 rounded-lg gap-1"
-                                onClick={() => handleStartEditUser(p)}
-                              >
-                                <Pencil className="h-3.5 w-3.5" />
-                                Edit
-                              </Button>
-                              <Button
-                                variant="outline"
-                                size="sm"
-                                className="h-8 rounded-lg gap-1 text-destructive hover:text-destructive"
-                                onClick={() => void handleDeleteUser(p.id)}
-                                disabled={p.id === user?.id}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                                Delete
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Inspections by Meat Type</p>
+                      {meatTypeAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={meatTypeAnalytics}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            <XAxis
+                              dataKey="meatType"
+                              {...(isMobile ? mobileCategoryAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                            />
+                            <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="count" radius={[8, 8, 0, 0]} fill="hsl(var(--primary))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Rate by Meat Type</p>
+                      {meatTypeAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={meatTypeAnalytics}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            <XAxis
+                              dataKey="meatType"
+                              {...(isMobile ? mobileCategoryAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                            />
+                            <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="spoiledRate" radius={[8, 8, 0, 0]} fill={PIE_COLORS.spoiled} />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
                   </CardContent>
                 </Card>
-              </div>
-            )}
 
-            {activeTab === "inspections" && (
-              <Card className="rounded-3xl border-border/70 bg-card/95">
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Location Trends</CardTitle>
+                    <CardDescription>
+                      Blank inspection and profile locations roll up under {UNSPECIFIED_LOCATION_LABEL} so missing routing data still surfaces in the overview.
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Top Locations by Inspection Count</p>
+                      {locationAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={locationAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="location" {...mobileCategoryAxisProps} />
+                                <YAxis allowDecimals={false} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="location"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="count" radius={[0, 8, 8, 0]} fill="hsl(var(--primary))" />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Spoiled Share by Location</p>
+                      {locationAnalytics.length > 0 ? (
+                        <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                          <BarChart data={locationAnalytics} layout={isMobile ? undefined : "vertical"} margin={isMobile ? { top: 8, right: 4, left: 0, bottom: 8 } : { left: 12, right: 12 }}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                            {isMobile ? (
+                              <>
+                                <XAxis dataKey="location" {...mobileCategoryAxisProps} />
+                                <YAxis domain={[0, 100]} tick={{ fontSize: 10 }} width={28} className="fill-muted-foreground" />
+                              </>
+                            ) : (
+                              <>
+                                <XAxis type="number" domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                                <YAxis
+                                  type="category"
+                                  dataKey="location"
+                                  width={88}
+                                  tick={{ fontSize: 11 }}
+                                  tickFormatter={truncateChartLabel}
+                                  className="fill-muted-foreground"
+                                />
+                              </>
+                            )}
+                            <ChartTooltip content={<ChartTooltipContent />} />
+                            <Bar dataKey="spoiledRate" radius={[0, 8, 8, 0]} fill={PIE_COLORS.spoiled} />
+                          </BarChart>
+                        </ChartContainer>
+                      ) : (
+                        <p className="mt-4 text-sm text-muted-foreground">No inspection data yet.</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                  <CardHeader>
+                    <CardTitle className="text-sm font-display uppercase tracking-wider">Quality Signals</CardTitle>
+                    <CardDescription>Follow day-by-day confidence stability and how the freshness mix shifts across the recent inspection window.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="grid min-w-0 gap-4 xl:grid-cols-2">
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Average Confidence Trend</p>
+                      <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                        <AreaChart data={confidenceTrendData}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                          <XAxis
+                            dataKey="date"
+                            {...(isMobile ? mobileTimeAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                          />
+                          <YAxis domain={[0, 100]} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Area type="monotone" dataKey="confidence" stroke="hsl(var(--warning))" fill="hsl(var(--warning) / 0.18)" />
+                        </AreaChart>
+                      </ChartContainer>
+                    </div>
+
+                    <div className="min-w-0 rounded-2xl border border-border/70 bg-background/50 p-3 sm:p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <p className="text-[11px] uppercase tracking-widest text-muted-foreground">Freshness Mix by Day</p>
+                        <div className="flex flex-wrap gap-3 text-[10px] uppercase tracking-widest text-muted-foreground">
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.fresh }} />Fresh</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS["not fresh"] }} />Not Fresh</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.acceptable }} />Acceptable</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.warning }} />Warning</span>
+                          <span className="inline-flex items-center gap-1.5"><span className="h-2 w-2 rounded-full" style={{ backgroundColor: PIE_COLORS.spoiled }} />Spoiled</span>
+                        </div>
+                      </div>
+                      <ChartContainer config={chartConfig} className="mt-4 h-[220px] w-full min-w-0 sm:h-[240px]">
+                        <BarChart data={freshnessMixData}>
+                          <CartesianGrid strokeDasharray="3 3" className="stroke-border/50" />
+                          <XAxis
+                            dataKey="date"
+                            {...(isMobile ? mobileTimeAxisProps : { tick: { fontSize: 11 }, className: "fill-muted-foreground" })}
+                          />
+                          <YAxis allowDecimals={false} tick={{ fontSize: 11 }} className="fill-muted-foreground" />
+                          <ChartTooltip content={<ChartTooltipContent />} />
+                          <Bar dataKey="fresh" stackId="freshness" fill={PIE_COLORS.fresh} />
+                          <Bar dataKey="notFresh" stackId="freshness" fill={PIE_COLORS["not fresh"]} />
+                          <Bar dataKey="acceptable" stackId="freshness" fill={PIE_COLORS.acceptable} />
+                          <Bar dataKey="warning" stackId="freshness" fill={PIE_COLORS.warning} />
+                          <Bar dataKey="spoiled" stackId="freshness" fill={PIE_COLORS.spoiled} radius={[6, 6, 0, 0]} />
+                        </BarChart>
+                      </ChartContainer>
+                    </div>
+                  </CardContent>
+                </Card>
+              </section>
+            </>
+          )}
+
+          {activeTab === "users" && (
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[0.95fr_1.05fr]">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
-                    <ClipboardList className="h-4 w-4" />
-                    All Inspections
+                    <UserPlus className="h-4 w-4" />
+                    {editingUserId ? "Edit User" : "Add User"}
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Full Name</Label>
+                    <Input
+                      value={userForm.full_name}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, full_name: e.target.value }))}
+                      placeholder="Juan dela Cruz"
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Email</Label>
+                    <Input
+                      type="email"
+                      value={userForm.email}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, email: e.target.value }))}
+                      placeholder="inspector@example.com"
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">
+                      {editingUserId ? "New Password (Optional)" : "Password"}
+                    </Label>
+                    <Input
+                      type="password"
+                      value={userForm.password}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, password: e.target.value }))}
+                      placeholder={editingUserId ? "Leave blank to keep current password" : "At least 6 characters"}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Inspector Code</Label>
+                    <Input
+                      value={userForm.inspector_code}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, inspector_code: e.target.value }))}
+                      placeholder="INSPECTOR-2026"
+                      className="h-10 rounded-xl font-display tracking-wider"
+                    />
+                  </div>
+
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Location</Label>
+                    <Input
+                      value={userForm.location}
+                      onChange={(e) => setUserForm((prev) => ({ ...prev, location: e.target.value }))}
+                      placeholder="Quezon City"
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+
+                  <div className="flex flex-wrap items-center gap-2 pt-1">
+                    <Button
+                      size="sm"
+                      onClick={() => void handleSubmitUserForm()}
+                      className="h-10 rounded-xl gap-1"
+                      disabled={isSavingUser}
+                    >
+                      {isSavingUser ? <Loader2 className="h-4 w-4 animate-spin" /> : editingUserId ? <Pencil className="h-4 w-4" /> : <Plus className="h-4 w-4" />}
+                      {editingUserId ? "Save Changes" : "Create User"}
+                    </Button>
+                    {editingUserId && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={resetUserForm}
+                        className="h-10 rounded-xl"
+                        disabled={isSavingUser}
+                      >
+                        Cancel Edit
+                      </Button>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
+                    <Users className="h-4 w-4" />
+                    Registered Users
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  <div className="mb-4">
+                  {profiles.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No users found</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {profiles.map((p) => (
+                        <div key={p.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="min-w-0 flex-1">
+                              <p className="truncate font-display text-base font-semibold">{p.full_name || "Unnamed"}</p>
+                              <p className="truncate text-xs text-muted-foreground">{p.email || "No email"}</p>
+                            </div>
+                            <span className="rounded-full border border-border/70 px-2 py-0.5 text-[10px] uppercase tracking-wider text-muted-foreground">
+                              {p.id === user?.id ? "You" : "User"}
+                            </span>
+                          </div>
+                          <div className="mt-3 space-y-1 text-xs text-muted-foreground">
+                            <p>Joined: {format(new Date(p.created_at), "MMM d, yyyy")}</p>
+                            <p>Location: {p.location || "No location"}</p>
+                            <p className="break-all">Inspector Code: {p.inspector_code || "N/A"}</p>
+                          </div>
+                          <div className="mt-3 flex flex-wrap items-center gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-lg gap-1"
+                              onClick={() => handleStartEditUser(p)}
+                            >
+                              <Pencil className="h-3.5 w-3.5" />
+                              Edit
+                            </Button>
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              className="h-8 rounded-lg gap-1 text-destructive hover:text-destructive"
+                              onClick={() => void handleDeleteUser(p.id)}
+                              disabled={p.id === user?.id}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              Delete
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "inspections" && (
+            <Card className="rounded-3xl border-border/70 bg-card/95">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-sm font-display uppercase tracking-wider">
+                  <ClipboardList className="h-4 w-4" />
+                  All Inspections
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="mb-4">
+                  <Input
+                    placeholder="Filter by inspector name..."
+                    value={inspectorFilter}
+                    onChange={(e) => setInspectorFilter(e.target.value)}
+                    className="h-10 rounded-xl"
+                  />
+                  {inspectorFilter.trim() && (
+                    <p className="mt-2 text-xs text-muted-foreground">
+                      Showing {filteredInspections.length} of {inspections.length} inspection{inspections.length !== 1 ? "s" : ""}
+                    </p>
+                  )}
+                </div>
+                {filteredInspections.length === 0 ? (
+                  <p className="py-8 text-center text-sm text-muted-foreground">
+                    {inspectorFilter.trim() ? `No inspections found for "${inspectorFilter.trim()}"` : "No inspections yet"}
+                  </p>
+                ) : (
+                  <div className="grid min-w-0 gap-3 lg:grid-cols-2">
+                    {filteredInspections.map((i) => (
+                      <div key={i.id} className="min-w-0 overflow-hidden rounded-2xl border border-border/70 bg-background/50 p-3">
+                        <div className="grid min-w-0 grid-cols-[auto_minmax(0,1fr)] gap-2 sm:grid-cols-[auto_minmax(0,1fr)_auto] sm:items-center sm:gap-3">
+                          {i.image_url ? (
+                            <button
+                              type="button"
+                              className="h-14 w-14 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 touch-manipulation cursor-zoom-in sm:h-16 sm:w-16"
+                              onClick={() => setPreviewImageUrl(i.image_url)}
+                              onTouchEnd={() => setPreviewImageUrl(i.image_url)}
+                              aria-label="View full inspection image"
+                            >
+                              <img src={i.image_url} alt="Sample" className="h-full w-full object-cover" />
+                            </button>
+                          ) : (
+                            <div className="flex h-14 w-14 flex-shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary sm:h-16 sm:w-16">
+                              <span className="font-display text-lg text-muted-foreground">{i.meat_type[0].toUpperCase()}</span>
+                            </div>
+                          )}
+                          <div className="min-w-0 flex-1">
+                            <div className="mb-1 flex items-center gap-2">
+                              <span className="truncate font-display text-sm font-semibold capitalize">{i.meat_type}</span>
+                              <FreshnessBadge classification={i.classification} size="sm" />
+                            </div>
+                            <p className="truncate text-xs font-medium text-foreground/80">{getInspectorLabel(i.user_id ? profileById.get(i.user_id) : undefined)}</p>
+                            <p className="text-xs text-muted-foreground">{format(new Date(i.created_at), "MMM d, yyyy h:mm a")}</p>
+                            <p className="text-xs text-muted-foreground">Confidence: {i.confidence_score}%</p>
+                            <p className="truncate text-[10px] text-muted-foreground">ID: {i.id}</p>
+                          </div>
+                          <div className="col-span-2 flex justify-end border-t border-border/60 pt-2 sm:col-span-1 sm:block sm:border-t-0 sm:pt-0">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 rounded-xl border-border/70 text-destructive hover:text-destructive sm:h-9 sm:w-9"
+                              onClick={() => void handleDeleteInspection(i.id)}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {activeTab === "markets" && (
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="text-sm font-display uppercase tracking-wider">Add Market Location</CardTitle>
+                  <CardDescription>
+                    Configure the capture station location options used by inspectors.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Market Name</Label>
                     <Input
-                      placeholder="Filter by inspector name..."
-                      value={inspectorFilter}
-                      onChange={(e) => setInspectorFilter(e.target.value)}
+                      placeholder="e.g. Old Market"
+                      value={newMarketName}
+                      onChange={(e) => setNewMarketName(e.target.value)}
                       className="h-10 rounded-xl"
                     />
-                    {inspectorFilter.trim() && (
-                      <p className="mt-2 text-xs text-muted-foreground">
-                        Showing {filteredInspections.length} of {inspections.length} inspection{inspections.length !== 1 ? "s" : ""}
-                      </p>
-                    )}
                   </div>
-                  {filteredInspections.length === 0 ? (
-                    <p className="py-8 text-center text-sm text-muted-foreground">
-                      {inspectorFilter.trim() ? `No inspections found for "${inspectorFilter.trim()}"` : "No inspections yet"}
-                    </p>
+                  <Button size="sm" onClick={() => void handleCreateMarket()} className="h-10 rounded-xl gap-1">
+                    <Plus className="h-4 w-4" />
+                    Add Market
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="text-sm font-display uppercase tracking-wider">Manage Market Locations</CardTitle>
+                  <CardDescription>
+                    Add or remove barangay markets shown in the capture station selector.
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {marketLocations.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No markets configured yet</p>
                   ) : (
-                    <div className="grid gap-4 lg:grid-cols-2">
-                      {filteredInspections.map((i) => (
-                        <div key={i.id} className="overflow-hidden rounded-2xl border border-border/70 bg-background/50 p-4">
-                          <div className="flex gap-4">
-                            {i.image_url ? (
-                              <button
-                                type="button"
-                                className="h-16 w-16 flex-shrink-0 overflow-hidden rounded-xl border border-border/70 cursor-zoom-in"
-                                onClick={() => setPreviewImageUrl(i.image_url)}
-                                aria-label="View full inspection image"
-                              >
-                                <img src={i.image_url} alt="Sample" className="h-full w-full object-cover" />
-                              </button>
-                            ) : (
-                              <div className="flex h-16 w-16 flex-shrink-0 items-center justify-center rounded-xl border border-border/70 bg-secondary">
-                                <span className="font-display text-lg text-muted-foreground">{i.meat_type[0].toUpperCase()}</span>
-                              </div>
-                            )}
-                            <div className="min-w-0 flex-1">
-                              <div className="flex items-center gap-2">
-                                <span className="truncate font-display text-sm font-semibold capitalize">{i.meat_type}</span>
-                                <FreshnessBadge classification={i.classification} size="sm" />
-                              </div>
-                              <p className="truncate text-xs font-medium text-foreground/80">{getInspectorLabel(i.user_id ? profileById.get(i.user_id) : undefined)}</p>
-                              <p className="text-xs text-muted-foreground">{format(new Date(i.created_at), "MMM d, yyyy h:mm a")}</p>
-                              <p className="text-xs text-muted-foreground">Confidence: {i.confidence_score}%</p>
-                              <p className="text-[10px] text-muted-foreground">ID: {i.id}</p>
+                    <div className="space-y-3">
+                      {marketLocations.map((market) => (
+                        <div key={market.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
+                          <div className="flex items-center justify-between gap-3">
+                            <div className="min-w-0">
+                              <p className="truncate font-display text-sm font-semibold">{market.name}</p>
+                              <p className="text-[10px] text-muted-foreground">
+                                Created {format(new Date(market.created_at), "MMM d, yyyy")}
+                              </p>
                             </div>
-                            <div className="flex items-start">
+                            <Button
+                              variant="outline"
+                              size="icon"
+                              className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
+                              onClick={() => void handleDeleteMarket(market.id)}
+                              aria-label={`Delete ${market.name}`}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            </div>
+          )}
+
+          {activeTab === "codes" && (
+            <div className="grid min-w-0 gap-4 xl:grid-cols-[0.9fr_1.1fr]">
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="text-sm font-display uppercase tracking-wider">Create Access Code</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Code</Label>
+                    <Input
+                      placeholder="e.g. INSPECTOR-2026"
+                      value={newCode}
+                      onChange={(e) => setNewCode(e.target.value)}
+                      className="h-10 rounded-xl font-display tracking-wider"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs uppercase tracking-widest text-muted-foreground">Description</Label>
+                    <Input
+                      placeholder="Batch for Region V"
+                      value={newCodeDesc}
+                      onChange={(e) => setNewCodeDesc(e.target.value)}
+                      className="h-10 rounded-xl"
+                    />
+                  </div>
+                  <Button size="sm" onClick={handleCreateCode} className="h-10 rounded-xl gap-1">
+                    <Plus className="h-4 w-4" />
+                    Generate
+                  </Button>
+                </CardContent>
+              </Card>
+
+              <Card className="min-w-0 rounded-3xl border-border/70 bg-card/95">
+                <CardHeader>
+                  <CardTitle className="text-sm font-display uppercase tracking-wider">Manage Access Codes</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {accessCodes.length === 0 ? (
+                    <p className="py-8 text-center text-sm text-muted-foreground">No access codes yet</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {accessCodes.map((c) => (
+                        <div key={c.id} className="rounded-2xl border border-border/70 bg-background/50 p-3">
+                          <div className="flex flex-wrap items-start justify-between gap-3">
+                            <div className="min-w-0 flex-1">
+                              <div className="mb-1 flex items-center gap-2">
+                                <span className="font-display text-sm font-semibold tracking-wider">{c.code}</span>
+                                <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${c.is_active ? "bg-fresh/20 text-fresh" : "bg-muted text-muted-foreground"}`}>
+                                  {c.is_active ? "Active" : "Disabled"}
+                                </span>
+                              </div>
+                              {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}
+                              <p className="mt-1 text-[10px] text-muted-foreground">Used {c.times_used}x - Created {format(new Date(c.created_at), "MMM d, yyyy")}</p>
+                            </div>
+                            <div className="flex flex-wrap items-center gap-1">
                               <Button
                                 variant="outline"
                                 size="icon"
-                                className="h-9 w-9 rounded-xl border-border/70 text-destructive hover:text-destructive"
-                                onClick={() => void handleDeleteInspection(i.id)}
+                                className="h-8 w-8 rounded-lg"
+                                onClick={async () => {
+                                  try {
+                                    await navigator.clipboard.writeText(c.code);
+                                    toast.success("Code copied");
+                                  } catch {
+                                    toast.error("Failed to copy code");
+                                  }
+                                }}
                               >
-                                <Trash2 className="h-4 w-4" />
+                                <Copy className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 rounded-lg text-xs font-display"
+                                onClick={() => void handleToggleCode(c.id, !c.is_active)}
+                              >
+                                {c.is_active ? "OFF" : "ON"}
+                              </Button>
+                              <Button
+                                variant="outline"
+                                size="icon"
+                                className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
+                                onClick={() => void handleDeleteCode(c.id)}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </div>
                           </div>
@@ -1680,173 +1943,13 @@ const DesktopAdminDashboard = () => {
                   )}
                 </CardContent>
               </Card>
-            )}
-
-            {activeTab === "markets" && (
-              <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-                <Card className="rounded-3xl border-border/70 bg-card/95">
-                  <CardHeader>
-                    <CardTitle className="text-sm font-display uppercase tracking-wider">Add Market Location</CardTitle>
-                    <CardDescription>
-                      Configure the capture station location options used by inspectors.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">Market Name</Label>
-                      <Input
-                        placeholder="e.g. Old Market"
-                        value={newMarketName}
-                        onChange={(e) => setNewMarketName(e.target.value)}
-                        className="h-10 rounded-xl"
-                      />
-                    </div>
-                    <Button size="sm" onClick={() => void handleCreateMarket()} className="h-10 rounded-xl gap-1">
-                      <Plus className="h-4 w-4" />
-                      Add Market
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="rounded-3xl border-border/70 bg-card/95">
-                  <CardHeader>
-                    <CardTitle className="text-sm font-display uppercase tracking-wider">Manage Market Locations</CardTitle>
-                    <CardDescription>
-                      Add or remove barangay markets shown in the capture station selector.
-                    </CardDescription>
-                  </CardHeader>
-                  <CardContent>
-                    {marketLocations.length === 0 ? (
-                      <p className="py-8 text-center text-sm text-muted-foreground">No markets configured yet</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {marketLocations.map((market) => (
-                          <div key={market.id} className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                            <div className="flex items-center justify-between gap-3">
-                              <div className="min-w-0">
-                                <p className="truncate font-display text-sm font-semibold">{market.name}</p>
-                                <p className="text-[10px] text-muted-foreground">
-                                  Created {format(new Date(market.created_at), "MMM d, yyyy")}
-                                </p>
-                              </div>
-                              <Button
-                                variant="outline"
-                                size="icon"
-                                className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
-                                onClick={() => void handleDeleteMarket(market.id)}
-                                aria-label={`Delete ${market.name}`}
-                              >
-                                <Trash2 className="h-3.5 w-3.5" />
-                              </Button>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-
-            {activeTab === "codes" && (
-              <div className="grid gap-5 xl:grid-cols-[0.9fr_1.1fr]">
-                <Card className="rounded-3xl border-border/70 bg-card/95">
-                  <CardHeader>
-                    <CardTitle className="text-sm font-display uppercase tracking-wider">Create Access Code</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-4">
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">Code</Label>
-                      <Input
-                        placeholder="e.g. INSPECTOR-2026"
-                        value={newCode}
-                        onChange={(e) => setNewCode(e.target.value)}
-                        className="h-10 rounded-xl font-display tracking-wider"
-                      />
-                    </div>
-                    <div className="space-y-1.5">
-                      <Label className="text-xs uppercase tracking-widest text-muted-foreground">Description</Label>
-                      <Input
-                        placeholder="Batch for Region V"
-                        value={newCodeDesc}
-                        onChange={(e) => setNewCodeDesc(e.target.value)}
-                        className="h-10 rounded-xl"
-                      />
-                    </div>
-                    <Button size="sm" onClick={handleCreateCode} className="h-10 rounded-xl gap-1">
-                      <Plus className="h-4 w-4" />
-                      Generate
-                    </Button>
-                  </CardContent>
-                </Card>
-
-                <Card className="rounded-3xl border-border/70 bg-card/95">
-                  <CardHeader>
-                    <CardTitle className="text-sm font-display uppercase tracking-wider">Manage Access Codes</CardTitle>
-                  </CardHeader>
-                  <CardContent>
-                    {accessCodes.length === 0 ? (
-                      <p className="py-8 text-center text-sm text-muted-foreground">No access codes yet</p>
-                    ) : (
-                      <div className="space-y-4">
-                        {accessCodes.map((c) => (
-                          <div key={c.id} className="rounded-2xl border border-border/70 bg-background/50 p-4">
-                            <div className="flex flex-wrap items-start justify-between gap-3">
-                              <div className="min-w-0 flex-1">
-                                <div className="mb-1 flex items-center gap-2">
-                                  <span className="font-display text-sm font-semibold tracking-wider">{c.code}</span>
-                                  <span className={`rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wider ${c.is_active ? "bg-fresh/20 text-fresh" : "bg-muted text-muted-foreground"}`}>
-                                    {c.is_active ? "Active" : "Disabled"}
-                                  </span>
-                                </div>
-                                {c.description && <p className="text-xs text-muted-foreground">{c.description}</p>}
-                                <p className="mt-1 text-[10px] text-muted-foreground">Used {c.times_used}x - Created {format(new Date(c.created_at), "MMM d, yyyy")}</p>
-                              </div>
-                              <div className="flex flex-wrap items-center gap-1">
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 rounded-lg"
-                                  onClick={async () => {
-                                    try {
-                                      await navigator.clipboard.writeText(c.code);
-                                      toast.success("Code copied");
-                                    } catch {
-                                      toast.error("Failed to copy code");
-                                    }
-                                  }}
-                                >
-                                  <Copy className="h-3.5 w-3.5" />
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 rounded-lg text-xs font-display"
-                                  onClick={() => void handleToggleCode(c.id, !c.is_active)}
-                                >
-                                  {c.is_active ? "OFF" : "ON"}
-                                </Button>
-                                <Button
-                                  variant="outline"
-                                  size="icon"
-                                  className="h-8 w-8 rounded-lg text-destructive hover:text-destructive"
-                                  onClick={() => void handleDeleteCode(c.id)}
-                                >
-                                  <Trash2 className="h-3.5 w-3.5" />
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </CardContent>
-                </Card>
-              </div>
-            )}
-          </div>
-        </main>
+            </div>
+          )}
+        </div>
       </div>
+    </main>
+  </div>
+</div>
 
       <Dialog open={Boolean(previewImageUrl)} onOpenChange={(open) => !open && setPreviewImageUrl(null)}>
         <DialogContent className="w-[min(96vw,980px)] max-w-5xl border-none bg-transparent p-0 shadow-none">
@@ -1903,4 +2006,4 @@ const DesktopAdminDashboard = () => {
   );
 };
 
-export default DesktopAdminDashboard;
+export default AdminDashboard;

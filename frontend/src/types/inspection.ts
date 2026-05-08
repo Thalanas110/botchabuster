@@ -19,6 +19,7 @@ export interface Inspection {
   image_url: string | null;
   location: string | null;
   inspector_notes: string | null;
+  captured_at?: string | null;
   created_at: string;
   updated_at: string;
 }

@@ -17,6 +17,7 @@ export interface Inspection {
   location: string | null;
   inspector_notes: string | null;
   client_submission_id: string | null;
+  captured_at: string;
   created_at: string;
   updated_at: string;
 }
@@ -38,5 +39,6 @@ export interface InspectionInsert {
   image_url?: string | null;
   location?: string | null;
   inspector_notes?: string | null;
+  captured_at?: string;
   client_submission_id: string;
 }

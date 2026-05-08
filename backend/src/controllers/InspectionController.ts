@@ -120,7 +120,22 @@ export class InspectionController {
         return;
       }
 
-      const { inspection, created } = await inspectionService.create(input as InspectionInsert, accessContext.userId);
+      let normalizedCapturedAt: string | undefined;
+      if (captured_at !== undefined) {
+        const parsedCapturedAt = Date.parse(captured_at);
+        if (Number.isNaN(parsedCapturedAt)) {
+          res.status(400).json({ error: "captured_at must be a valid ISO datetime string" });
+          return;
+        }
+        normalizedCapturedAt = new Date(parsedCapturedAt).toISOString();
+      }
+
+      const inspectionInput: InspectionInsert = {
+        ...(input as InspectionInsert),
+        ...(normalizedCapturedAt ? { captured_at: normalizedCapturedAt } : {}),
+      };
+
+      const { inspection, created } = await inspectionService.create(inspectionInput, accessContext.userId);
 
       if (created) {
         await auditLogService.write({

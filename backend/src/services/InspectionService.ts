@@ -13,6 +13,27 @@ type SupabaseWriteError = {
   message: string;
 };
 
+type InspectionInsertPayload = {
+  user_id: string;
+  client_submission_id: string;
+  meat_type: InspectionInsert["meat_type"];
+  classification: InspectionInsert["classification"];
+  confidence_score: number;
+  captured_at?: string;
+  lab_l?: number;
+  lab_a?: number;
+  lab_b?: number;
+  glcm_contrast?: number;
+  glcm_correlation?: number;
+  glcm_energy?: number;
+  glcm_homogeneity?: number;
+  flagged_deviations?: string[];
+  explanation?: string | null;
+  image_url?: string | null;
+  location?: string | null;
+  inspector_notes?: string | null;
+};
+
 export class InspectionService {
   private static instance: InspectionService;
   private readonly tableName = "inspections";
@@ -74,11 +95,7 @@ export class InspectionService {
       return { inspection: existingInspection, created: false };
     }
 
-    const inspectionPayload: InspectionInsert = {
-      ...inspection,
-      user_id: userId,
-      client_submission_id: clientSubmissionId,
-    };
+    const inspectionPayload = this.buildInsertPayload(inspection, userId, clientSubmissionId);
 
     const { data, error } = await (supabase
       .from(this.tableName) as any)
@@ -154,6 +171,36 @@ export class InspectionService {
 
   private isDuplicateClientSubmissionError(error: SupabaseWriteError): boolean {
     return error.code === "23505" && error.message.includes("client_submission_id");
+  }
+
+  private buildInsertPayload(
+    inspection: InspectionInsert,
+    userId: string,
+    clientSubmissionId: string,
+  ): InspectionInsertPayload {
+    const payload: InspectionInsertPayload = {
+      user_id: userId,
+      client_submission_id: clientSubmissionId,
+      meat_type: inspection.meat_type,
+      classification: inspection.classification,
+      confidence_score: inspection.confidence_score,
+    };
+
+    if (inspection.lab_l !== undefined) payload.lab_l = inspection.lab_l;
+    if (inspection.lab_a !== undefined) payload.lab_a = inspection.lab_a;
+    if (inspection.lab_b !== undefined) payload.lab_b = inspection.lab_b;
+    if (inspection.captured_at !== undefined) payload.captured_at = inspection.captured_at;
+    if (inspection.glcm_contrast !== undefined) payload.glcm_contrast = inspection.glcm_contrast;
+    if (inspection.glcm_correlation !== undefined) payload.glcm_correlation = inspection.glcm_correlation;
+    if (inspection.glcm_energy !== undefined) payload.glcm_energy = inspection.glcm_energy;
+    if (inspection.glcm_homogeneity !== undefined) payload.glcm_homogeneity = inspection.glcm_homogeneity;
+    if (inspection.flagged_deviations !== undefined) payload.flagged_deviations = inspection.flagged_deviations;
+    if (inspection.explanation !== undefined) payload.explanation = inspection.explanation;
+    if (inspection.image_url !== undefined) payload.image_url = inspection.image_url;
+    if (inspection.location !== undefined) payload.location = inspection.location;
+    if (inspection.inspector_notes !== undefined) payload.inspector_notes = inspection.inspector_notes;
+
+    return payload;
   }
 }
 

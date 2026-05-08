@@ -22,6 +22,8 @@ import ResetPasswordPage from "./pages/ResetPasswordPage";
 import InspectPage from "./pages/Index";
 import HistoryPage from "./pages/HistoryPage";
 import AdminDashboard from "./pages/AdminDashboard";
+import DesktopAdminDashboard from "./pages/DesktopAdminDashboard";
+import AdminDashboardWrapper from "./pages/AdminDashboardWrapper";
 import ProfilePage from "./pages/ProfilePage";
 import NotFound from "./pages/NotFound";
 
@@ -108,7 +110,7 @@ const App = () => {
               <Route path="/profile" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
 
               {/* Admin routes */}
-              <Route path="/admin" element={<AdminRoute><AppLayout><AdminDashboard /></AppLayout></AdminRoute>} />
+              <Route path="/admin" element={<AdminRoute><AdminDashboardWrapper /></AdminRoute>} />
 
               <Route path="*" element={<NotFound />} />
             </Routes>

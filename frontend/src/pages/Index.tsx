@@ -181,6 +181,7 @@ const InspectPage = () => {
         toast.warning("Local MobileNetV3 analysis failed; used backend fallback.");
       }
 
+      /*
       if (analysisResult.confidence_score < MIN_CONFIDENCE_TO_ACCEPT) {
         toast.warning(
           `Confidence ${analysisResult.confidence_score}% is below ${MIN_CONFIDENCE_TO_ACCEPT}%. Please retake the photo.`
@@ -192,6 +193,7 @@ const InspectPage = () => {
         setClientSubmissionId(null);
         return;
       }
+      */
 
       setResult(analysisResult);
     } catch (error) {

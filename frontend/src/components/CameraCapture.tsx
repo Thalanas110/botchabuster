@@ -419,14 +419,29 @@ const startCamera = useCallback(async () => {
                   </p>
                 </div>
                 <div className="absolute inset-x-0 h-0.5 bg-primary/60 animate-scan-line" />
-                <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-primary/30 bg-background/80 px-2 py-1 shadow-sm">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const videoTrack = stream?.getVideoTracks()[0];
+                    if (videoTrack) {
+                      const newState = !flashEnabled;
+                      try {
+                        await videoTrack.applyConstraints({ advanced: [{ torch: newState } as MediaTrackConstraintSet] });
+                        setFlashEnabled(newState);
+                      } catch {
+                        console.warn("[Camera] Flash toggle failed");
+                      }
+                    }
+                  }}
+                  className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-primary/30 bg-background/80 px-2 py-1 shadow-sm transition-colors hover:bg-background/90"
+                >
                   <span
-                    className={`h-2 w-2 rounded-full ${flashEnabled ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
+                    className={`h-2 w-2 rounded-full ${flashEnabled ? "bg-green-500 animate-pulse" : "bg-gray-400"}`}
                   />
                   <p className="text-[9px] font-medium uppercase tracking-wide">
                     {flashEnabled ? "Flash On" : "Flash Off"}
                   </p>
-                </div>
+                </button>
               </>
             )}
           </>
@@ -451,8 +466,8 @@ const startCamera = useCallback(async () => {
             </Button>
           </>
 ) : isStreaming ? (
-          <Button onClick={capturePhoto} size="lg" className="w-full gap-2 rounded-xl" disabled={disabled || !isVideoReady || !flashEnabled}>
-            <Camera className="h-5 w-5" /> {isVideoReady ? (flashEnabled ? "Capture" : "Flash Required") : "Starting..."}
+          <Button onClick={capturePhoto} size="lg" className="w-full gap-2 rounded-xl" disabled={disabled || !isVideoReady}>
+            <Camera className="h-5 w-5" /> {isVideoReady ? "Capture" : "Starting..."}
           </Button>
         ) : (
           <div className="flex w-full flex-col gap-3 min-[380px]:flex-row">

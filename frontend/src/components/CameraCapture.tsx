@@ -46,11 +46,12 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-  const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
+const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [captureGuideBox, setCaptureGuideBox] = useState<SquareGuideBox | null>(null);
   const [modelInputPreview, setModelInputPreview] = useState<string | null>(null);
   const [isPreparingModelPreview, setIsPreparingModelPreview] = useState(false);
+  const [flashEnabled, setFlashEnabled] = useState(false);
 
   const updateModelInputPreview = useCallback(async (sourceFile: File, guideBox: SquareGuideBox | null) => {
     const requestId = ++previewRequestIdRef.current;
@@ -80,7 +81,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
     }
   }, []);
 
-  const startCamera = useCallback(async () => {
+const startCamera = useCallback(async () => {
     if (disabled) return;
 
     setError(null);
@@ -104,10 +105,27 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
             facingMode: { ideal: "environment" },
             width: { ideal: 1280 },
             height: { ideal: 960 },
+            torch: true,
           },
         });
       } catch {
         mediaStream = await navigator.mediaDevices.getUserMedia({ video: true });
+      }
+
+      const videoTrack = mediaStream?.getVideoTracks()[0];
+      if (videoTrack) {
+        const capabilities = videoTrack.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
+        if (capabilities.torch) {
+          try {
+            await videoTrack.applyConstraints({ advanced: [{ torch: true } as MediaTrackConstraintSet] });
+            setFlashEnabled(true);
+          } catch {
+            console.warn("[Camera] Flash not supported on this device");
+            setFlashEnabled(false);
+          }
+        } else {
+          setFlashEnabled(false);
+        }
       }
 
       if (videoRef.current) {
@@ -383,7 +401,7 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
               </div>
             )}
 
-            {isVideoReady && (
+{isVideoReady && (
               <>
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div
@@ -398,6 +416,14 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
                   </p>
                 </div>
                 <div className="absolute inset-x-0 h-0.5 bg-primary/60 animate-scan-line" />
+                <div className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-primary/30 bg-background/80 px-2 py-1 shadow-sm">
+                  <span
+                    className={`h-2 w-2 rounded-full ${flashEnabled ? "bg-green-500 animate-pulse" : "bg-red-500"}`}
+                  />
+                  <p className="text-[9px] font-medium uppercase tracking-wide">
+                    {flashEnabled ? "Flash On" : "Flash Off"}
+                  </p>
+                </div>
               </>
             )}
           </>
@@ -421,9 +447,9 @@ export function CameraCapture({ onCapture, className, disabled = false }: Camera
               <Check className="h-4 w-4" /> Use Photo
             </Button>
           </>
-        ) : isStreaming ? (
-          <Button onClick={capturePhoto} size="lg" className="w-full gap-2 rounded-xl" disabled={disabled || !isVideoReady}>
-            <Camera className="h-5 w-5" /> {isVideoReady ? "Capture" : "Starting..."}
+) : isStreaming ? (
+          <Button onClick={capturePhoto} size="lg" className="w-full gap-2 rounded-xl" disabled={disabled || !isVideoReady || !flashEnabled}>
+            <Camera className="h-5 w-5" /> {isVideoReady ? (flashEnabled ? "Capture" : "Flash Required") : "Starting..."}
           </Button>
         ) : (
           <div className="flex w-full flex-col gap-3 min-[380px]:flex-row">

@@ -8,6 +8,7 @@ import { auditLogClient } from "@/integrations/api/AuditLogClient";
 import { getPendingScans, removeScan, type PendingScan } from "@/lib/offlineQueue";
 import { getPendingAuditLogs, removeAuditLog, type PendingAuditLog } from "@/lib/offlineAuditQueue";
 import { prewarmModel } from "@/lib/offlineAnalysis";
+import { getDeveloperOptionsFlags } from "@/lib/developerOptions";
 
 /**
  * All queued scans now carry a pre-computed analysisResult (either from the
@@ -100,11 +101,20 @@ export function OfflineSyncManager() {
     if (!user) return;
     if (isRunning.current) return;
 
+    const developerFlags = getDeveloperOptionsFlags(user.id);
+
     isRunning.current = true;
     try {
+      if (developerFlags.verboseOfflineSyncLogs) {
+        console.info("[OfflineSyncManager] Queue drain started", { userId: user.id });
+      }
+
       const pendingAuditLogs = await getPendingAuditLogs();
       const mineAuditLogs = pendingAuditLogs.filter((log) => log.userId === user.id);
       if (mineAuditLogs.length > 0) {
+        if (developerFlags.verboseOfflineSyncLogs) {
+          console.info("[OfflineSyncManager] Syncing pending audit logs", { count: mineAuditLogs.length });
+        }
         await processAuditLogs(mineAuditLogs);
       }
 
@@ -116,6 +126,9 @@ export function OfflineSyncManager() {
 
       for (const scan of mine) {
         try {
+          if (developerFlags.verboseOfflineSyncLogs) {
+            console.info("[OfflineSyncManager] Syncing pending scan", { id: scan.id });
+          }
           await processScan(scan, queryClient);
         } catch (err) {
           console.error("[OfflineSyncManager] Failed to sync scan:", err);
@@ -124,18 +137,38 @@ export function OfflineSyncManager() {
         }
       }
     } finally {
+      if (developerFlags.verboseOfflineSyncLogs) {
+        console.info("[OfflineSyncManager] Queue drain finished", { userId: user.id });
+      }
       isRunning.current = false;
     }
   };
 
   useEffect(() => {
+    const maybePrewarm = () => {
+      if (!user) {
+        prewarmModel();
+        return;
+      }
+
+      const developerFlags = getDeveloperOptionsFlags(user.id);
+      if (developerFlags.skipModelPrewarm) {
+        if (developerFlags.verboseOfflineSyncLogs) {
+          console.info("[OfflineSyncManager] Skipping model prewarm due to developer option");
+        }
+        return;
+      }
+
+      prewarmModel();
+    };
+
     void drainQueue();
     // Start loading MobileNetV3 weights while online.
-    prewarmModel();
+    maybePrewarm();
 
     const handleOnline = () => {
       void drainQueue();
-      prewarmModel();
+      maybePrewarm();
     };
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);

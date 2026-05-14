@@ -13,6 +13,9 @@ export class Config {
   readonly auditLogKeyId: string;
   readonly uploadDir: string;
   readonly maxFileSize: number;
+  readonly developerOptionsPassword: string;
+  readonly developerOptionsTokenSecret: string;
+  readonly developerOptionsTokenTtlSeconds: number;
   readonly allowedOrigins: string[];
 
   private constructor() {
@@ -23,6 +26,12 @@ export class Config {
     this.auditLogKeyId = process.env.AUDIT_LOG_KEY_ID || "v1";
     this.uploadDir = process.env.UPLOAD_DIR || "./uploads";
     this.maxFileSize = 10 * 1024 * 1024; // 10MB
+    this.developerOptionsPassword = process.env.DEVELOPER_OPTIONS_PASSWORD || "";
+    this.developerOptionsTokenSecret = process.env.DEVELOPER_OPTIONS_TOKEN_SECRET || this.developerOptionsPassword;
+    this.developerOptionsTokenTtlSeconds = Math.max(
+      60,
+      parseInt(process.env.DEVELOPER_OPTIONS_TOKEN_TTL_SECONDS || "21600", 10),
+    );
     this.allowedOrigins = getAllowedOrigins(process.env);
   }
 

@@ -15,10 +15,20 @@ import { Loader2, Save, RotateCcw, Microscope, TestTube2, Camera, ScanLine, Cloc
 import { toast } from "sonner";
 import { useAuth } from "@/contexts/AuthContext";
 import { uploadClient } from "@/integrations/api";
+import { developerOptionsClient } from "@/integrations/api/DeveloperOptionsClient";
 import { queueScan } from "@/lib/offlineQueue";
 import { analyzeOffline } from "@/lib/offlineAnalysis";
 import { loadMobileNetV3, isModelReady as getMobileNetModelReady } from "@/lib/offlineAnalysis/mobileNetV3";
 import { DEFAULT_MARKET_LOCATIONS } from "@/lib/marketLocations";
+import {
+  clearDeveloperOptionsSession,
+  DEFAULT_DEVELOPER_OPTIONS_FLAGS,
+  getDeveloperOptionsFlags,
+  getDeveloperOptionsSession,
+  isDeveloperOptionsSessionExpired,
+  saveDeveloperAnalysisSnapshot,
+  type DeveloperOptionsFlags,
+} from "@/lib/developerOptions";
 
 const DEFAULT_MEAT_TYPE: MeatType = "pork";
 const FALLBACK_MARKET_LOCATIONS = [...DEFAULT_MARKET_LOCATIONS];
@@ -26,7 +36,7 @@ const ENABLE_BACKEND_ANALYSIS_FALLBACK = import.meta.env.VITE_ENABLE_BACKEND_ANA
 const MIN_CONFIDENCE_TO_ACCEPT = 90;
 
 const InspectPage = () => {
-  const { user, profile } = useAuth();
+  const { user, profile, isAdmin } = useAuth();
   const [capturedInput, setCapturedInput] = useState<CapturedImagePayload | null>(null);
   const [result, setResult] = useState<AnalysisResult | null>(null);
   const [marketLocations, setMarketLocations] = useState<string[]>(FALLBACK_MARKET_LOCATIONS);
@@ -35,9 +45,52 @@ const InspectPage = () => {
   const [isModelReady, setIsModelReady] = useState<boolean>(() => !navigator.onLine || getMobileNetModelReady());
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved" | "queued">("idle");
   const [clientSubmissionId, setClientSubmissionId] = useState<string | null>(null);
+  const [developerFlags, setDeveloperFlags] = useState<DeveloperOptionsFlags>(DEFAULT_DEVELOPER_OPTIONS_FLAGS);
+  const [isDeveloperUnlocked, setIsDeveloperUnlocked] = useState(false);
   const saveLockRef = useRef(false);
   const analyzeImage = useAnalyzeImage();
   const createInspection = useCreateInspection();
+
+  useEffect(() => {
+    if (!user || !isAdmin) {
+      setDeveloperFlags(DEFAULT_DEVELOPER_OPTIONS_FLAGS);
+      setIsDeveloperUnlocked(false);
+      return;
+    }
+
+    const flags = getDeveloperOptionsFlags(user.id);
+    setDeveloperFlags(flags);
+
+    const session = getDeveloperOptionsSession(user.id);
+    if (!session || isDeveloperOptionsSessionExpired(session)) {
+      if (session) {
+        clearDeveloperOptionsSession(user.id);
+      }
+      setIsDeveloperUnlocked(false);
+      return;
+    }
+
+    setIsDeveloperUnlocked(true);
+
+    if (!navigator.onLine) {
+      return;
+    }
+
+    void developerOptionsClient.verify(session.token).then((valid) => {
+      if (valid) return;
+      clearDeveloperOptionsSession(user.id);
+      setIsDeveloperUnlocked(false);
+    }).catch(() => {
+      // Keep local unlocked session while offline verification is unavailable.
+    });
+  }, [isAdmin, user]);
+
+  const isDebugFileUploadEnabled = Boolean(
+    user &&
+    isAdmin &&
+    isDeveloperUnlocked &&
+    developerFlags.enableDebugFileUpload,
+  );
 
   useEffect(() => {
     let isCancelled = false;
@@ -148,27 +201,14 @@ const InspectPage = () => {
     setIsAnalyzing(true);
     try {
       let analysisResult: AnalysisResult;
+      const forceBackendAnalysis =
+        navigator.onLine &&
+        isAdmin &&
+        isDeveloperUnlocked &&
+        developerFlags.forceBackendAnalysisFallback &&
+        ENABLE_BACKEND_ANALYSIS_FALLBACK;
 
-      try {
-        // Always prefer local MobileNetV3 ONNX analysis first.
-        analysisResult = await analyzeOffline(capturedInput.file, DEFAULT_MEAT_TYPE, {
-          guideBox: capturedInput.guideBox,
-        });
-
-        if (analysisResult.analysis_source === "mobilenetv3+rules") {
-          toast.success("MobileNetV3 ONNX analysis complete.");
-        } else {
-          toast.warning(
-            navigator.onLine
-              ? "MobileNetV3 model was not ready after waiting; ran rules-only fallback. Retry once more."
-              : "Model unavailable offline; ran rules-only fallback."
-          );
-        }
-      } catch (offlineError) {
-        if (!navigator.onLine || !ENABLE_BACKEND_ANALYSIS_FALLBACK) {
-          throw offlineError;
-        }
-
+      if (forceBackendAnalysis) {
         const backendResult = await analyzeImage.mutateAsync({
           file: capturedInput.file,
           meatType: DEFAULT_MEAT_TYPE,
@@ -178,7 +218,39 @@ const InspectPage = () => {
           analysis_source: "backend",
           model_path: null,
         };
-        toast.warning("Local MobileNetV3 analysis failed; used backend fallback.");
+        toast.info("Developer option forced backend analysis.");
+      } else {
+        try {
+          // Always prefer local MobileNetV3 ONNX analysis first.
+          analysisResult = await analyzeOffline(capturedInput.file, DEFAULT_MEAT_TYPE, {
+            guideBox: capturedInput.guideBox,
+          });
+
+          if (analysisResult.analysis_source === "mobilenetv3+rules") {
+            toast.success("MobileNetV3 ONNX analysis complete.");
+          } else {
+            toast.warning(
+              navigator.onLine
+                ? "MobileNetV3 model was not ready after waiting; ran rules-only fallback. Retry once more."
+                : "Model unavailable offline; ran rules-only fallback."
+            );
+          }
+        } catch (offlineError) {
+          if (!navigator.onLine || !ENABLE_BACKEND_ANALYSIS_FALLBACK) {
+            throw offlineError;
+          }
+
+          const backendResult = await analyzeImage.mutateAsync({
+            file: capturedInput.file,
+            meatType: DEFAULT_MEAT_TYPE,
+          });
+          analysisResult = {
+            ...backendResult,
+            analysis_source: "backend",
+            model_path: null,
+          };
+          toast.warning("Local MobileNetV3 analysis failed; used backend fallback.");
+        }
       }
 
       /*
@@ -196,6 +268,15 @@ const InspectPage = () => {
       */
 
       setResult(analysisResult);
+      if (user && isAdmin && isDeveloperUnlocked && developerFlags.persistAnalysisSnapshots) {
+        saveDeveloperAnalysisSnapshot(user.id, {
+          capturedAt: capturedInput.capturedAt,
+          source: capturedInput.source,
+          meatType: DEFAULT_MEAT_TYPE,
+          location: selectedLocation.trim() || null,
+          result: analysisResult,
+        });
+      }
     } catch (error) {
       setResult(null);
       if (error instanceof AnalysisApiError) {
@@ -208,7 +289,17 @@ const InspectPage = () => {
     } finally {
       setIsAnalyzing(false);
     }
-  }, [capturedInput, analyzeImage, isModelReady]);
+  }, [
+    analyzeImage,
+    capturedInput,
+    developerFlags.forceBackendAnalysisFallback,
+    developerFlags.persistAnalysisSnapshots,
+    isAdmin,
+    isDeveloperUnlocked,
+    isModelReady,
+    selectedLocation,
+    user,
+  ]);
 
   const handleSave = useCallback(async () => {
     if (!result || !capturedInput?.file || saveLockRef.current || saveStatus === "saved" || saveStatus === "queued") return;
@@ -362,7 +453,12 @@ const InspectPage = () => {
 
             <CalibrationBanner />
 
-            <CameraCapture onCapture={handleCapture} disabled={saveStatus === "saving" || createInspection.isPending} />
+            <CameraCapture
+              onCapture={handleCapture}
+              disabled={saveStatus === "saving" || createInspection.isPending}
+              allowFileUpload={isDebugFileUploadEnabled}
+              showModelInputPreview={developerFlags.showModelInputPreview}
+            />
 
             {capturedInput && !result && (
               <div className="mt-4">

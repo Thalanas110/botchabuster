@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { ConfirmDialog } from "@/components/ConfirmDialog";
+import { DeveloperOptionsPanel } from "@/components/DeveloperOptionsPanel";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { useAuth } from "@/contexts/AuthContext";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -37,6 +38,7 @@ import {
   MapPin,
   FileBarChart2,
   ScrollText,
+  Bug,
 } from "lucide-react";
 import { toast } from "sonner";
 import { format, subDays, startOfDay, endOfDay, isAfter } from "date-fns";
@@ -95,6 +97,7 @@ const tabs = [
   { key: "markets" as const, label: "Markets", icon: MapPin },
   { key: "reports" as const, label: "Reports", icon: FileBarChart2 },
   { key: "logs" as const, label: "Logs", icon: ScrollText },
+  { key: "developer" as const, label: "Developer Options", icon: Bug },
 ];
 
 const getInspectorLabel = (profile?: Profile) =>
@@ -163,7 +166,7 @@ const AdminDashboard = () => {
   const [marketLocations, setMarketLocations] = useState<MarketLocation[]>([]);
   const [stats, setStats] = useState<{ total_users: number; total_inspections: number; roles: RoleStat[] | null } | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets" | "reports" | "logs">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "users" | "inspections" | "codes" | "markets" | "reports" | "logs" | "developer">("overview");
   const [newCode, setNewCode] = useState("");
   const [newCodeDesc, setNewCodeDesc] = useState("");
   const [newMarketName, setNewMarketName] = useState("");
@@ -2113,6 +2116,12 @@ const AdminDashboard = () => {
                   )}
                 </CardContent>
               </Card>
+            </div>
+          )}
+
+          {activeTab === "developer" && (
+            <div className="mt-6">
+              <DeveloperOptionsPanel />
             </div>
           )}
         </div>

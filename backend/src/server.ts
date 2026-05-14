@@ -14,6 +14,7 @@ import authRoutes from "./routes/auth";
 import chatRoutes from "./routes/chat";
 import marketLocationRoutes from "./routes/marketLocations";
 import auditLogRoutes from "./routes/auditLogs";
+import developerOptionsRoutes from "./routes/developerOptions";
 
 const config = Config.getInstance();
 const app = express();
@@ -67,6 +68,7 @@ app.use("/api/auth", authRoutes);
 app.use("/api/chat", chatRoutes);
 app.use("/api/market-locations", marketLocationRoutes);
 app.use("/api/audit-logs", auditLogRoutes);
+app.use("/api/developer-options", developerOptionsRoutes);
 
 function handleServerError(error: NodeJS.ErrnoException): never {
   if (error.code === "EADDRINUSE") {

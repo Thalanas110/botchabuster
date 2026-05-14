@@ -65,3 +65,13 @@ export async function getPendingAuditCount(): Promise<number> {
     req.onerror = () => reject(req.error);
   });
 }
+
+export async function clearPendingAuditLogs(): Promise<void> {
+  const db = await openDb();
+  return new Promise((resolve, reject) => {
+    const tx = db.transaction(STORE_NAME, "readwrite");
+    tx.objectStore(STORE_NAME).clear();
+    tx.oncomplete = () => resolve();
+    tx.onerror = () => reject(tx.error);
+  });
+}

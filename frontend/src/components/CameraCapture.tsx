@@ -34,9 +34,17 @@ interface CameraCaptureProps {
   onCapture: (payload: CapturedImagePayload) => void;
   className?: string;
   disabled?: boolean;
+  allowFileUpload?: boolean;
+  showModelInputPreview?: boolean;
 }
 
-export function CameraCapture({ onCapture, className, disabled = false }: CameraCaptureProps) {
+export function CameraCapture({
+  onCapture,
+  className,
+  disabled = false,
+  allowFileUpload = false,
+  showModelInputPreview = true,
+}: CameraCaptureProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const capturedImageRef = useRef<HTMLImageElement>(null);
@@ -260,10 +268,26 @@ const startCamera = useCallback(async () => {
     void updateModelInputPreview(uploadedFile, guideBox);
   }, [qualitySource, updateModelInputPreview, uploadedFile]);
 
+  useEffect(() => {
+    if (allowFileUpload) return;
+    if (qualitySource !== "file") return;
+
+    setCapturedImage(null);
+    setUploadedFile(null);
+    setCaptureGuideBox(null);
+    setModelInputPreview(null);
+    setQualitySource("canvas");
+  }, [allowFileUpload, qualitySource]);
+
   const confirmCapture = useCallback(() => {
     if (disabled) return;
 
     if (qualitySource === "file") {
+      if (!allowFileUpload) {
+        toast.error("File upload is only available in unlocked developer options.");
+        return;
+      }
+
       if (uploadedFile) {
         // Uploaded files already pass assessFileQuality() before preview.
         onCapture({
@@ -299,7 +323,7 @@ const startCamera = useCallback(async () => {
       "image/jpeg",
       0.9
     );
-  }, [captureGuideBox, disabled, onCapture, qualitySource, uploadedFile]);
+  }, [allowFileUpload, captureGuideBox, disabled, onCapture, qualitySource, uploadedFile]);
 
   const retake = useCallback(() => {
     if (disabled) return;
@@ -320,6 +344,11 @@ const startCamera = useCallback(async () => {
   const handleFileInput = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (disabled) return;
+      if (!allowFileUpload) {
+        toast.error("File upload is only available in unlocked developer options.");
+        e.target.value = "";
+        return;
+      }
 
       const file = e.target.files?.[0];
       if (file) {
@@ -341,7 +370,7 @@ const startCamera = useCallback(async () => {
         reader.readAsDataURL(file);
       }
     },
-    [disabled, onCapture, updateModelInputPreview]
+    [allowFileUpload, disabled, onCapture, updateModelInputPreview]
   );
 
   return (
@@ -371,25 +400,27 @@ const startCamera = useCallback(async () => {
               </p>
             </div>
 
-            <div className="absolute right-3 top-3 rounded-lg border border-primary/30 bg-background/86 p-1.5 shadow-md">
-              <p className="mb-1 text-[9px] font-display uppercase tracking-widest text-muted-foreground">
-                Model Input
-              </p>
-              <div className="h-14 w-14 overflow-hidden rounded-md border border-border/70 bg-secondary">
-                {modelInputPreview ? (
-                  <img
-                    src={modelInputPreview}
-                    alt="224 by 224 model input preview"
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="flex h-full w-full items-center justify-center text-[9px] text-muted-foreground">
-                    {isPreparingModelPreview ? "..." : "N/A"}
-                  </div>
-                )}
+            {showModelInputPreview && (
+              <div className="absolute right-3 top-3 rounded-lg border border-primary/30 bg-background/86 p-1.5 shadow-md">
+                <p className="mb-1 text-[9px] font-display uppercase tracking-widest text-muted-foreground">
+                  Model Input
+                </p>
+                <div className="h-14 w-14 overflow-hidden rounded-md border border-border/70 bg-secondary">
+                  {modelInputPreview ? (
+                    <img
+                      src={modelInputPreview}
+                      alt="224 by 224 model input preview"
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="flex h-full w-full items-center justify-center text-[9px] text-muted-foreground">
+                      {isPreparingModelPreview ? "..." : "N/A"}
+                    </div>
+                  )}
+                </div>
+                <p className="mt-1 text-[9px] font-display uppercase tracking-widest text-muted-foreground">224x224</p>
               </div>
-              <p className="mt-1 text-[9px] font-display uppercase tracking-widest text-muted-foreground">224x224</p>
-            </div>
+            )}
           </>
         ) : isStreaming ? (
           <>
@@ -471,21 +502,28 @@ const startCamera = useCallback(async () => {
           </Button>
         ) : (
           <div className="flex w-full flex-col gap-3 min-[380px]:flex-row">
-            <Button onClick={() => void startCamera()} size="lg" className="w-full gap-2 rounded-xl min-[380px]:flex-1" disabled={disabled || isStarting}>
+            <Button
+              onClick={() => void startCamera()}
+              size="lg"
+              className={`w-full gap-2 rounded-xl ${allowFileUpload ? "min-[380px]:flex-1" : ""}`}
+              disabled={disabled || isStarting}
+            >
               <Camera className="h-5 w-5" /> {isStarting ? "Starting..." : "Open Camera"}
             </Button>
-            <label className="w-full min-[380px]:flex-1">
-              <Button
-                variant="outline"
-                size="lg"
-                className="w-full cursor-pointer gap-2 rounded-xl"
-                disabled={disabled}
-                asChild
-              >
-                <span>Upload File</span>
-              </Button>
-              <input type="file" accept="image/*" className="hidden" disabled={disabled} onChange={handleFileInput} />
-            </label>
+            {allowFileUpload && (
+              <label className="w-full min-[380px]:flex-1">
+                <Button
+                  variant="outline"
+                  size="lg"
+                  className="w-full cursor-pointer gap-2 rounded-xl"
+                  disabled={disabled}
+                  asChild
+                >
+                  <span>Upload File</span>
+                </Button>
+                <input type="file" accept="image/*" className="hidden" disabled={disabled} onChange={handleFileInput} />
+              </label>
+            )}
           </div>
         )}
       </div>

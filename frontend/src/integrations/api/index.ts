@@ -7,3 +7,4 @@ export { UploadClient, uploadClient } from "./UploadClient";
 export { AuthClient, authClient, type AuthUser, type AuthSession } from "./AuthClient";
 export { AnalysisClient, analysisClient } from "./AnalysisClient";
 export { AuditLogClient, auditLogClient, type AuditLogEvent } from "./AuditLogClient";
+export { DeveloperOptionsClient, developerOptionsClient, type DeveloperUnlockResponse } from "./DeveloperOptionsClient";

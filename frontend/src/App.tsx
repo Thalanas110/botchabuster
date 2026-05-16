@@ -25,6 +25,7 @@ import AdminDashboard from "./pages/AdminDashboard";
 import DesktopAdminDashboard from "./pages/DesktopAdminDashboard";
 import AdminDashboardWrapper from "./pages/AdminDashboardWrapper";
 import ProfilePage from "./pages/ProfilePage";
+import MessagesPage from "./pages/MessagesPage";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient({
@@ -106,6 +107,7 @@ const App = () => {
               {/* Protected app routes */}
               <Route path="/inspect" element={<ProtectedRoute><AppLayout><InspectPage /></AppLayout></ProtectedRoute>} />
               <Route path="/history" element={<ProtectedRoute><AppLayout><HistoryPage /></AppLayout></ProtectedRoute>} />
+              <Route path="/messages" element={<ProtectedRoute><AppLayout><MessagesPage /></AppLayout></ProtectedRoute>} />
               <Route path="/dashboard" element={<Navigate to="/history" replace />} />
               <Route path="/profile" element={<ProtectedRoute><AppLayout><ProfilePage /></AppLayout></ProtectedRoute>} />
 

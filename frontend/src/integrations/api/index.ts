@@ -8,3 +8,4 @@ export { AuthClient, authClient, type AuthUser, type AuthSession } from "./AuthC
 export { AnalysisClient, analysisClient } from "./AnalysisClient";
 export { AuditLogClient, auditLogClient, type AuditLogEvent } from "./AuditLogClient";
 export { DeveloperOptionsClient, developerOptionsClient, type DeveloperUnlockResponse } from "./DeveloperOptionsClient";
+export { UserChatClient, userChatClient, type UserChatContact, type UserChatMessage } from "./UserChatClient";

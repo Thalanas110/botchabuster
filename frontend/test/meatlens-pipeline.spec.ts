@@ -86,14 +86,24 @@ test.describe("MeatLens inference pipeline helpers", () => {
     expect(resolveOutputLabels(4)).toEqual(["fresh", "acceptable", "warning", "spoiled"]);
   });
 
-  test("normalizes logits and maps argmax prediction", () => {
+  test("normalizes logits and applies low-confidence top-2 override", () => {
     const probabilities = normalizeModelProbabilities([1, 3, 2]);
     const prediction = parsePrediction(probabilities, ["fresh", "not fresh", "spoiled"]);
 
-    expect(prediction.predictedClass).toBe("not fresh");
-    expect(prediction.confidence).toBeGreaterThan(0.6);
-    expect(prediction.confidencePercent).toBeGreaterThanOrEqual(60);
-    expect(prediction.probabilitiesByLabel["not fresh"]).toBeCloseTo(prediction.confidence, 10);
+    expect(prediction.predictedClass).toBe("spoiled");
+    expect(prediction.confidence).toBeCloseTo(
+      prediction.probabilitiesByLabel["not fresh"] + prediction.probabilitiesByLabel["spoiled"],
+      10
+    );
+    expect(prediction.confidencePercent).toBeGreaterThanOrEqual(90);
+  });
+
+  test("keeps top-1 class when model confidence is at least 90 percent", () => {
+    const prediction = parsePrediction([0.92, 0.05, 0.03], ["fresh", "not fresh", "spoiled"]);
+
+    expect(prediction.predictedClass).toBe("fresh");
+    expect(prediction.confidence).toBeCloseTo(0.92, 10);
+    expect(prediction.confidencePercent).toBe(92);
   });
 
   test("computes freshness score and recommendation from class confidence", () => {

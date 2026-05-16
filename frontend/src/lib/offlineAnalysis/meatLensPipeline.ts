@@ -462,15 +462,18 @@ export function parsePrediction(probabilities: number[], labelOrder: string[]): 
     };
   }
 
-  let maxIndex = 0;
-  let maxValue = probabilities[0];
-
-  for (let index = 1; index < usableLength; index++) {
-    if (probabilities[index] > maxValue) {
-      maxValue = probabilities[index];
-      maxIndex = index;
-    }
-  }
+  const ranked = Array.from({ length: usableLength }, (_, index) => ({
+    index,
+    value: probabilities[index],
+  })).sort((left, right) => right.value - left.value);
+  const topPrediction = ranked[0];
+  const secondPrediction = ranked[1];
+  const topConfidencePercent = clamp(topPrediction.value * 100, 0, 100);
+  const useTopTwoOverride = Boolean(secondPrediction) && topConfidencePercent < 90;
+  const selectedIndex = useTopTwoOverride ? secondPrediction.index : topPrediction.index;
+  const selectedConfidence = useTopTwoOverride
+    ? clamp(topPrediction.value + secondPrediction.value, 0, 1)
+    : clamp(topPrediction.value, 0, 1);
 
   const probabilitiesByLabel: Record<string, number> = {};
   for (let index = 0; index < usableLength; index++) {
@@ -479,9 +482,9 @@ export function parsePrediction(probabilities: number[], labelOrder: string[]): 
   }
 
   return {
-    predictedClass: normalizeClassificationLabel(labelOrder[maxIndex]),
-    confidence: clamp(maxValue, 0, 1),
-    confidencePercent: Math.round(clamp(maxValue * 100, 0, 100)),
+    predictedClass: normalizeClassificationLabel(labelOrder[selectedIndex]),
+    confidence: selectedConfidence,
+    confidencePercent: Math.round(clamp(selectedConfidence * 100, 0, 100)),
     probabilitiesByLabel,
   };
 }

@@ -1101,7 +1101,7 @@ const AdminDashboard = () => {
             <div className="flex h-9 w-9 items-center justify-center rounded-xl border border-border/70 bg-[hsl(var(--primary)/0.15)]">
               <ShieldCheck className="h-5 w-5 text-primary" />
             </div>
-            <span className="ml-3 font-display text-base font-semibold tracking-tight">Admin</span>
+            <span className="ml-3 font-display text-base font-semibold tracking-tight">MeatLens</span>
           </div>
           <nav className="flex flex-col gap-1 p-3">
             {tabs.map(({ key, label, icon: Icon }) => (

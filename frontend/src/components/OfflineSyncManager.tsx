@@ -5,29 +5,23 @@ import { useAuth } from "@/contexts/AuthContext";
 import { uploadClient } from "@/integrations/api/UploadClient";
 import { inspectionClient } from "@/integrations/api/InspectionClient";
 import { auditLogClient } from "@/integrations/api/AuditLogClient";
+import { analysisClient } from "@/integrations/api/AnalysisClient";
 import { getPendingScans, removeScan, type PendingScan } from "@/lib/offlineQueue";
 import { getPendingAuditLogs, removeAuditLog, type PendingAuditLog } from "@/lib/offlineAuditQueue";
 import { prewarmModel } from "@/lib/offlineAnalysis";
 import { getDeveloperOptionsFlags } from "@/lib/developerOptions";
 
 /**
- * All queued scans now carry a pre-computed analysisResult (either from the
- * backend when online, or from the in-browser analyzeOffline() engine when
- * offline). The sync step only needs to upload the image and persist to DB.
+ * Queued scans may already include analysisResult, or only a cached capture.
+ * If analysis is missing we run backend analysis during sync, then upload and
+ * persist the inspection record.
  */
 async function processScan(
   scan: PendingScan,
   queryClient: ReturnType<typeof useQueryClient>,
 ): Promise<void> {
-  if (!scan.analysisResult) {
-    // Should not happen post-refactor, but guard defensively.
-    console.warn("[OfflineSyncManager] Scan missing analysisResult, skipping:", scan.id);
-    await removeScan(scan.id);
-    return;
-  }
-
-  const result = scan.analysisResult;
   const imageFile = new File([scan.imageData], scan.imageName, { type: scan.imageType });
+  const result = scan.analysisResult ?? await analysisClient.analyzeImage(imageFile, scan.meatType);
 
   // Upload image to Supabase Storage (non-fatal).
   let imageUrl: string | null = null;

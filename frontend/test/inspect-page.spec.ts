@@ -11,13 +11,6 @@ test("prevents saving the same analyzed record more than once", async ({ page })
   await page.goto("/inspect");
   await uploadSamplePhoto(page);
   await page.getByRole("button", { name: "Use Photo" }).click();
-  const analyzeButton = page.getByRole("button", { name: /Analyze Sample|Preparing MobileNetV3/i });
-  await expect(analyzeButton).toBeVisible();
-  await expect(analyzeButton).toBeEnabled({ timeout: 30_000 });
-  await analyzeButton.click();
-
-  await expect(page.getByRole("heading", { name: "Classification" })).toBeVisible({ timeout: 60_000 });
-
   let uploadCalls = 0;
   let createCalls = 0;
   let createPayload = "";
@@ -46,13 +39,12 @@ test("prevents saving the same analyzed record more than once", async ({ page })
     await route.fallback();
   });
 
-  const saveButton = page.getByRole("button", { name: "Save Record" });
-  await expect(saveButton).toBeVisible();
+  const analyzeButton = page.getByRole("button", { name: /Analyze Sample|Preparing MobileNetV3/i });
+  await expect(analyzeButton).toBeVisible();
+  await expect(analyzeButton).toBeEnabled({ timeout: 30_000 });
+  await analyzeButton.click();
 
-  await saveButton.evaluate((button) => {
-    (button as HTMLButtonElement).click();
-    (button as HTMLButtonElement).click();
-  });
+  await expect(page.getByRole("heading", { name: "Classification" })).toBeVisible({ timeout: 60_000 });
 
   await expect.poll(() => uploadCalls).toBe(1);
   await expect.poll(() => createCalls).toBe(1);

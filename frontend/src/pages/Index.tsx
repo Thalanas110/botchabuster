@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useEffect } from "react";
+﻿import { useState, useCallback, useRef, useEffect } from "react";
 import { CameraCapture, type CapturedImagePayload } from "@/components/CameraCapture";
 import { CalibrationBanner } from "@/components/CalibrationBanner";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
@@ -48,6 +48,7 @@ const InspectPage = () => {
   const [developerFlags, setDeveloperFlags] = useState<DeveloperOptionsFlags>(DEFAULT_DEVELOPER_OPTIONS_FLAGS);
   const [isDeveloperUnlocked, setIsDeveloperUnlocked] = useState(false);
   const saveLockRef = useRef(false);
+  const autoSaveAttemptedRef = useRef(false);
   const analyzeImage = useAnalyzeImage();
   const createInspection = useCreateInspection();
 
@@ -183,12 +184,36 @@ const InspectPage = () => {
   const handleCapture = useCallback((capture: CapturedImagePayload) => {
     if (saveStatus === "saving") return;
 
+    const submissionId = createClientSubmissionId();
     setCapturedInput(capture);
     setResult(null);
     setSaveStatus("idle");
     saveLockRef.current = false;
-    setClientSubmissionId(createClientSubmissionId());
-  }, [saveStatus]);
+    autoSaveAttemptedRef.current = false;
+    setClientSubmissionId(submissionId);
+
+    if (!navigator.onLine && user) {
+      void (async () => {
+        try {
+          const imageData = await capture.file.arrayBuffer();
+          await queueScan({
+            id: submissionId,
+            imageData,
+            imageType: capture.file.type,
+            imageName: capture.file.name,
+            meatType: DEFAULT_MEAT_TYPE,
+            location: selectedLocation.trim() || null,
+            capturedAt: capture.capturedAt,
+            queuedAt: new Date().toISOString(),
+            userId: user.id,
+          });
+          toast.info("Captured offline - image cached locally for sync.");
+        } catch {
+          toast.error("Failed to cache offline capture.");
+        }
+      })();
+    }
+  }, [saveStatus, selectedLocation, user]);
 
 
   const handleAnalyze = useCallback(async () => {
@@ -311,7 +336,7 @@ const InspectPage = () => {
     const submissionId = clientSubmissionId ?? createClientSubmissionId();
     setClientSubmissionId(submissionId);
 
-    // ── Offline path: queue with already-computed result ─────────────────────
+    // â”€â”€ Offline path: queue with already-computed result â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     if (!navigator.onLine) {
       try {
         const imageData = await capturedInput.file.arrayBuffer();
@@ -328,14 +353,14 @@ const InspectPage = () => {
           analysisResult: result,
         });
         setSaveStatus("queued");
-        toast.info("You're offline — save queued. It'll upload & record when you reconnect.");
+        toast.info("You're offline - save queued. It will upload and record when you reconnect.");
       } catch {
         toast.error("Failed to queue save for offline storage.");
       }
       return;
     }
 
-    // ── Online path ─────────────────────────────────────────────────────────
+    // â”€â”€ Online path â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
     saveLockRef.current = true;
     setSaveStatus("saving");
 
@@ -377,11 +402,21 @@ const InspectPage = () => {
     }
   }, [result, createInspection, user, capturedInput, clientSubmissionId, saveStatus, selectedLocation]);
 
+  useEffect(() => {
+    if (!result || !capturedInput?.file || !user) return;
+    if (saveStatus !== "idle") return;
+    if (saveLockRef.current || autoSaveAttemptedRef.current) return;
+
+    autoSaveAttemptedRef.current = true;
+    void handleSave();
+  }, [capturedInput, handleSave, result, saveStatus, user]);
+
   const handleReset = useCallback(() => {
     setCapturedInput(null);
     setResult(null);
     setSaveStatus("idle");
     saveLockRef.current = false;
+    autoSaveAttemptedRef.current = false;
     setClientSubmissionId(null);
   }, []);
 
@@ -560,3 +595,5 @@ function createClientSubmissionId(): string {
     return value.toString(16);
   });
 }
+
+

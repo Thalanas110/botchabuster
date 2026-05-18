@@ -20,34 +20,34 @@ export function getConfidenceTextClass(confidence: number): string {
   const band = getConfidenceBand(confidence);
 
   if (band === "green") {
-    return "text-fresh";
+    return "text-emerald-500";
   }
 
   if (band === "yellow") {
-    return "text-acceptable";
+    return "text-yellow-500";
   }
 
   if (band === "orange") {
-    return "text-warning";
+    return "text-orange-500";
   }
 
-  return "text-spoiled";
+  return "text-red-500";
 }
 
 export function getConfidenceFillClass(confidence: number): string {
   const band = getConfidenceBand(confidence);
 
   if (band === "green") {
-    return "bg-[hsl(var(--fresh))]";
+    return "bg-emerald-500";
   }
 
   if (band === "yellow") {
-    return "bg-[hsl(var(--acceptable))]";
+    return "bg-yellow-500";
   }
 
   if (band === "orange") {
-    return "bg-[hsl(var(--warning))]";
+    return "bg-orange-500";
   }
 
-  return "bg-[hsl(var(--spoiled))]";
+  return "bg-red-500";
 }

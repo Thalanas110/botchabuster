@@ -76,26 +76,55 @@ function describeClassification(classification: FreshnessClassification): string
   return "The output is consistent with advanced spoilage indicators and should be treated as high risk.";
 }
 
-function buildProbabilitySummary(
+type ConfidenceTier = "strong" | "review" | "caution" | "retake";
+
+interface ProbabilityEntry {
+  label: FreshnessClassification;
+  value: number;
+}
+
+function resolveConfidenceTier(confidenceScore: number): ConfidenceTier {
+  if (confidenceScore >= LOW_CONFIDENCE_WARNING_THRESHOLD) {
+    return "strong";
+  }
+
+  if (confidenceScore >= RETAKE_RECOMMEND_THRESHOLD) {
+    return "review";
+  }
+
+  if (confidenceScore >= 70) {
+    return "caution";
+  }
+
+  return "retake";
+}
+
+function resolveProbabilityEntries(
   probabilities: Partial<Record<FreshnessClassification, number>> | undefined,
   labelOrder: FreshnessClassification[] | undefined
-): string | null {
+): ProbabilityEntry[] {
   if (!probabilities) {
-    return null;
+    return [];
   }
 
   const labels = labelOrder && labelOrder.length > 0
     ? labelOrder
     : (Object.keys(probabilities) as FreshnessClassification[]);
 
-  const entries = labels
+  return labels
     .map((label) => ({ label, value: probabilities[label] }))
     .filter(
-      (entry): entry is { label: FreshnessClassification; value: number } =>
+      (entry): entry is ProbabilityEntry =>
         typeof entry.value === "number" && Number.isFinite(entry.value) && entry.value >= 0
     )
-    .sort((left, right) => right.value - left.value)
-    .slice(0, 3);
+    .sort((left, right) => right.value - left.value);
+}
+
+function buildProbabilitySummary(
+  probabilities: Partial<Record<FreshnessClassification, number>> | undefined,
+  labelOrder: FreshnessClassification[] | undefined
+): string | null {
+  const entries = resolveProbabilityEntries(probabilities, labelOrder);
 
   if (entries.length === 0) {
     return null;
@@ -104,6 +133,89 @@ function buildProbabilitySummary(
   return entries
     .map((entry) => `${formatClassificationLabel(entry.label)} ${Math.round(entry.value * 100)}%`)
     .join(", ");
+}
+
+function buildProbabilityDiagnostics(
+  probabilities: Partial<Record<FreshnessClassification, number>> | undefined,
+  labelOrder: FreshnessClassification[] | undefined
+): string | null {
+  const entries = resolveProbabilityEntries(probabilities, labelOrder);
+  if (entries.length < 2) {
+    return null;
+  }
+
+  const top1 = entries[0];
+  const top2 = entries[1];
+  const marginPercent = Math.round((top1.value - top2.value) * 100);
+
+  return `Margin between top-1 (${formatClassificationLabel(top1.label)}) and top-2 (${formatClassificationLabel(top2.label)}) is ${marginPercent} percentage points.`;
+}
+
+function buildBranchNarrative(classification: FreshnessClassification, confidenceTier: ConfidenceTier): string {
+  const branchLabel = `${formatClassificationLabel(classification)}-${confidenceTier}`.toUpperCase();
+
+  if (classification === "fresh") {
+    if (confidenceTier === "strong") {
+      return `Output branch ${branchLabel}: Fresh signal is dominant with stable separation from competing classes.`;
+    }
+    return `Output branch ${branchLabel}: Fresh indicators are present but still require manual confirmation before release decisions.`;
+  }
+
+  if (classification === "acceptable") {
+    if (confidenceTier === "strong") {
+      return `Output branch ${branchLabel}: Product is within acceptable range but drift markers are measurable.`;
+    }
+    return `Output branch ${branchLabel}: Acceptable branch with uncertainty; handle as near-threshold quality.`;
+  }
+
+  if (classification === "warning") {
+    if (confidenceTier === "strong") {
+      return `Output branch ${branchLabel}: Warning class has clear dominance, indicating quality instability.`;
+    }
+    if (confidenceTier === "review") {
+      return `Output branch ${branchLabel}: Warning-level result driven by mid confidence; prioritize inspector review before storage/sell decisions.`;
+    }
+    if (confidenceTier === "caution") {
+      return `Output branch ${branchLabel}: Warning plus low separation. Capture conditions or sample variation may be affecting certainty.`;
+    }
+    return `Output branch ${branchLabel}: Warning with very low certainty. Retake workflow should be prioritized.`;
+  }
+
+  if (classification === "not fresh") {
+    if (confidenceTier === "strong") {
+      return `Output branch ${branchLabel}: Not-fresh profile is strongly expressed and aligns with quality decline.`;
+    }
+    return `Output branch ${branchLabel}: Not-fresh branch detected with uncertainty; treat conservatively.`;
+  }
+
+  if (confidenceTier === "strong") {
+    return `Output branch ${branchLabel}: Spoilage markers dominate model output and indicate high-risk quality state.`;
+  }
+  return `Output branch ${branchLabel}: Spoilage branch detected, but confidence is not fully stable.`;
+}
+
+function buildDecisionAdvice(
+  classification: FreshnessClassification,
+  confidenceTier: ConfidenceTier,
+  recommendation: "Good for Consumption" | "Consume Immediately" | "Not Suitable"
+): string {
+  if (confidenceTier === "retake") {
+    return "Decision guidance: retake first, then only proceed to logging/saving after inspector recheck.";
+  }
+
+  if (confidenceTier === "caution") {
+    return `Decision guidance: keep current recommendation (${recommendation}) but require supervisor-level validation due to low confidence.`;
+  }
+
+  if (confidenceTier === "review") {
+    return `Decision guidance: recommendation is ${recommendation}; proceed only with explicit inspector confirmation and notes.`;
+  }
+
+  if (classification === "warning" || classification === "not fresh" || classification === "spoiled") {
+    return `Decision guidance: recommendation is ${recommendation}; prioritize immediate handling and stricter quality controls.`;
+  }
+
+  return `Decision guidance: recommendation is ${recommendation}; acceptable for normal flow with routine documentation.`;
 }
 
 function buildAnalysisExplanation({
@@ -124,12 +236,16 @@ function buildAnalysisExplanation({
   labelOrder?: FreshnessClassification[];
 }): string {
   const probabilitySummary = buildProbabilitySummary(probabilities, labelOrder);
+  const probabilityDiagnostics = buildProbabilityDiagnostics(probabilities, labelOrder);
   const confidenceBand = describeConfidenceBand(confidenceScore);
+  const confidenceTier = resolveConfidenceTier(confidenceScore);
   const formattedClass = formatClassificationLabel(classification);
 
   const sentences = [
     `The ${meatType} sample is classified as ${formattedClass} by MobileNetV3 ONNX with ${confidenceScore}% confidence (${confidenceBand}).`,
-    probabilitySummary ? `Top class probabilities: ${probabilitySummary}.` : null,
+    probabilitySummary ? `Class probabilities: ${probabilitySummary}.` : null,
+    probabilityDiagnostics,
+    buildBranchNarrative(classification, confidenceTier),
     describeClassification(classification),
     `Computed freshness score is ${Math.round(freshnessScore)}/100, mapped to recommendation: ${recommendation}.`,
     confidenceScore < RETAKE_RECOMMEND_THRESHOLD
@@ -137,6 +253,7 @@ function buildAnalysisExplanation({
       : confidenceScore < LOW_CONFIDENCE_WARNING_THRESHOLD
       ? "Confidence is below 90%, so this output should be treated as warning-level and validated by inspector judgment."
       : "Confidence is at or above 90%, indicating a stable model decision under current capture conditions.",
+    buildDecisionAdvice(classification, confidenceTier, recommendation),
     "This score is model-derived from image patterns and should be interpreted as decision support, not a direct biochemical measurement.",
   ];
 

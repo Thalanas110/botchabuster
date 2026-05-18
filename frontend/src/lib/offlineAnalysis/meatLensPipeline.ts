@@ -51,6 +51,7 @@ const RESNET_MEAN_BGR = {
 const DEFAULT_LABEL_ORDER_4 = ["fresh", "acceptable", "warning", "spoiled"] as const;
 const DEFAULT_LABEL_ORDER_3 = ["fresh", "not fresh", "spoiled"] as const;
 const DEFAULT_LABEL_ORDER_2 = ["fresh", "spoiled"] as const;
+const LOW_CONFIDENCE_BRIDGE_THRESHOLD_PERCENT = 90;
 
 function isFinitePositive(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -467,13 +468,9 @@ export function parsePrediction(probabilities: number[], labelOrder: string[]): 
     value: probabilities[index],
   })).sort((left, right) => right.value - left.value);
   const topPrediction = ranked[0];
-  const secondPrediction = ranked[1];
-  const topConfidencePercent = clamp(topPrediction.value * 100, 0, 100);
-  const useTopTwoOverride = Boolean(secondPrediction) && topConfidencePercent < 90;
-  const selectedIndex = useTopTwoOverride ? secondPrediction.index : topPrediction.index;
-  const selectedConfidence = useTopTwoOverride
-    ? clamp(topPrediction.value + secondPrediction.value, 0, 1)
-    : clamp(topPrediction.value, 0, 1);
+  const topClass = normalizeClassificationLabel(labelOrder[topPrediction.index]);
+  const topConfidence = clamp(topPrediction.value, 0, 1);
+  const topConfidencePercent = Math.round(clamp(topConfidence * 100, 0, 100));
 
   const probabilitiesByLabel: Record<string, number> = {};
   for (let index = 0; index < usableLength; index++) {
@@ -481,17 +478,40 @@ export function parsePrediction(probabilities: number[], labelOrder: string[]): 
     probabilitiesByLabel[label] = probabilities[index];
   }
 
+  let predictedClass = topClass;
+  if (
+    predictedClass === "fresh" &&
+    topConfidencePercent < LOW_CONFIDENCE_BRIDGE_THRESHOLD_PERCENT
+  ) {
+    predictedClass = "acceptable";
+  } else if (
+    (predictedClass === "not fresh" || predictedClass === "spoiled") &&
+    topConfidencePercent < LOW_CONFIDENCE_BRIDGE_THRESHOLD_PERCENT
+  ) {
+    predictedClass = "warning";
+  }
+
   return {
-    predictedClass: normalizeClassificationLabel(labelOrder[selectedIndex]),
-    confidence: selectedConfidence,
-    confidencePercent: Math.round(clamp(selectedConfidence * 100, 0, 100)),
+    predictedClass,
+    confidence: topConfidence,
+    confidencePercent: topConfidencePercent,
     probabilitiesByLabel,
   };
 }
 
-function mapToScoringClass(classification: FreshnessClassification): "fresh" | "not fresh" | "spoiled" {
+function mapToScoringClass(
+  classification: FreshnessClassification
+): "fresh" | "acceptable" | "not fresh" | "warning" | "spoiled" {
   if (classification === "fresh") {
     return "fresh";
+  }
+
+  if (classification === "acceptable") {
+    return "acceptable";
+  }
+
+  if (classification === "warning") {
+    return "warning";
   }
 
   if (classification === "spoiled") {
@@ -508,10 +528,14 @@ export function computeFreshnessScore(predictedClass: string, confidence: number
   let score: number;
   if (normalizedClass === "fresh") {
     score = 70 + 30 * boundedConfidence;
+  } else if (normalizedClass === "acceptable") {
+    score = 60 + 20 * boundedConfidence;
   } else if (normalizedClass === "not fresh") {
     score = 40 + 20 * boundedConfidence;
+  } else if (normalizedClass === "warning") {
+    score = 20 + 20 * boundedConfidence;
   } else {
-    score = 39 - 34 * boundedConfidence;
+    score = 20 - 20 * boundedConfidence;
   }
 
   return clamp(score, 0, 100);

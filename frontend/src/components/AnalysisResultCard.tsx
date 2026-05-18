@@ -1,4 +1,4 @@
-import type { AnalysisResult } from "@/types/inspection";
+import type { AnalysisResult, FreshnessClassification } from "@/types/inspection";
 import { FreshnessBadge } from "@/components/FreshnessBadge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getConfidenceFillClass, getConfidenceTextClass } from "@/lib/confidenceLevel";
@@ -17,6 +17,27 @@ export function AnalysisResultCard({ result, showDetailedResults = true, classNa
       : "MobileNetV3 ONNX";
   const confidenceFillClass = getConfidenceFillClass(result.confidence_score);
   const confidenceTextClass = getConfidenceTextClass(result.confidence_score);
+  const modelOutputRows = (() => {
+    if (!result.probabilities) {
+      return [];
+    }
+
+    const labels = result.label_order && result.label_order.length > 0
+      ? result.label_order
+      : (Object.keys(result.probabilities) as FreshnessClassification[]);
+
+    return labels
+      .map((label) => ({
+        label,
+        probability: result.probabilities?.[label],
+      }))
+      .filter(
+        (entry): entry is { label: FreshnessClassification; probability: number } =>
+          typeof entry.probability === "number" && Number.isFinite(entry.probability) && entry.probability >= 0
+      )
+      .sort((left, right) => right.probability - left.probability)
+      .slice(0, 3);
+  })();
 
   return (
     <div className={cn("space-y-3", className)}>
@@ -38,15 +59,42 @@ export function AnalysisResultCard({ result, showDetailedResults = true, classNa
             </div>
             <span className={cn("font-display text-sm font-bold", confidenceTextClass)}>{result.confidence_score}%</span>
           </div>
-          <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">Source: {sourceLabel}</p>
-          {typeof result.freshness_score === "number" && (
-            <p className="mt-1 text-[11px] text-muted-foreground">Freshness score: {Math.round(result.freshness_score)}/100</p>
-          )}
-          {result.recommendation && (
-            <p className="mt-1 text-[11px] text-muted-foreground">Recommendation: {result.recommendation}</p>
-          )}
-          {result.model_confidence_score !== null && result.model_confidence_score !== undefined && (
-            <p className="mt-1 text-[11px] text-muted-foreground">Model confidence: {result.model_confidence_score}%</p>
+          {showDetailedResults && (
+            <>
+              <p className="mt-2 text-[10px] uppercase tracking-widest text-muted-foreground">Source: {sourceLabel}</p>
+              {typeof result.freshness_score === "number" && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Freshness score: {Math.round(result.freshness_score)}/100</p>
+              )}
+              {result.recommendation && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Recommendation: {result.recommendation}</p>
+              )}
+              {result.model_confidence_score !== null && result.model_confidence_score !== undefined && (
+                <p className="mt-1 text-[11px] text-muted-foreground">Model confidence: {result.model_confidence_score}%</p>
+              )}
+              {modelOutputRows.length > 0 && (
+                <div className="mt-3">
+                  <p className="mb-2 text-[10px] font-display uppercase tracking-widest text-muted-foreground">
+                    Model Output Probabilities (Top 3)
+                  </p>
+                  <div className="space-y-2">
+                    {modelOutputRows.map((row) => (
+                      <div key={row.label} className="space-y-1">
+                        <div className="flex items-center justify-between gap-2 text-[11px] text-muted-foreground">
+                          <span className="capitalize">{row.label}</span>
+                          <span>{Math.round(row.probability * 100)}%</span>
+                        </div>
+                        <div className="h-1.5 overflow-hidden rounded-full bg-secondary">
+                          <div
+                            className="h-full rounded-full bg-primary/75"
+                            style={{ width: `${Math.round(Math.max(0, Math.min(1, row.probability)) * 100)}%` }}
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

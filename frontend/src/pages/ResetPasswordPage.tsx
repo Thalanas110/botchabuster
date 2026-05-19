@@ -7,6 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Label } from "@/components/ui/label";
 import { Loader2, Lock } from "lucide-react";
 import { toast } from "sonner";
+import { consumeStoredRecoveryAccessToken } from "@/lib/authUrlHash";
 
 const ResetPasswordPage = () => {
   const [password, setPassword] = useState("");
@@ -22,10 +23,21 @@ const ResetPasswordPage = () => {
     const hashParams = new URLSearchParams(hashValue);
     const recoveryType = hashParams.get("type");
     const token = hashParams.get("access_token");
+    const tokenFromStorage = consumeStoredRecoveryAccessToken();
+    const resolvedToken = tokenFromStorage ?? token;
 
-    if (recoveryType === "recovery" && token) {
+    if (recoveryType === "recovery" && resolvedToken) {
       setIsRecovery(true);
-      setAccessToken(token);
+      setAccessToken(resolvedToken);
+      if (window.location.hash) {
+        window.history.replaceState(window.history.state, document.title, `${window.location.pathname}${window.location.search}`);
+      }
+      return;
+    }
+
+    if (!recoveryType && tokenFromStorage) {
+      setIsRecovery(true);
+      setAccessToken(tokenFromStorage);
     }
   }, []);
 

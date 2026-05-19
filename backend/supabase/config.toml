@@ -1,4 +1,28 @@
 project_id = "cwjkepajlhothqldygfr"
 
+[auth.email.template.confirmation]
+subject = "MeatLens - Confirm your sign up"
+content_path = "./supabase/templates/confirmation.html"
+
+[auth.email.template.recovery]
+subject = "MeatLens - Reset your password"
+content_path = "./supabase/templates/recovery.html"
+
+[auth.email.template.magic_link]
+subject = "MeatLens - Your secure sign-in link"
+content_path = "./supabase/templates/magic_link.html"
+
+[auth.email.template.invite]
+subject = "MeatLens - You are invited"
+content_path = "./supabase/templates/invite.html"
+
+[auth.email.template.email_change]
+subject = "MeatLens - Confirm your email change"
+content_path = "./supabase/templates/email_change.html"
+
+[auth.email.template.reauthentication]
+subject = "MeatLens - Confirm reauthentication"
+content_path = "./supabase/templates/reauthentication.html"
+
 [functions.chat]
 verify_jwt = false

@@ -4,9 +4,12 @@ import App from "./App.tsx";
 import "./index.css";
 import { applyTheme } from "@/lib/themePreference";
 import { prewarmModel } from "@/lib/offlineAnalysis";
+import { scrubSensitiveAuthHashFromUrl } from "@/lib/authUrlHash";
 
 // Start in light mode; app router/auth layer will apply user preference from DB.
 applyTheme(false);
+// Immediately clear Supabase auth tokens from URL fragments to avoid accidental leakage.
+scrubSensitiveAuthHashFromUrl();
 // Start ONNX model warmup as early as possible in app boot.
 prewarmModel();
 

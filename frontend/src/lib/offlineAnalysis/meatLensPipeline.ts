@@ -797,6 +797,18 @@ export function parsePrediction(probabilities: number[], labelOrder: string[]): 
   confidencePercent: number;
   probabilitiesByLabel: Record<string, number>;
 } {
+  const canMergeLowConfidencePair = (
+    first: FreshnessClassification,
+    second: FreshnessClassification
+  ): boolean => {
+    return (
+      (first === "fresh" && second === "not fresh") ||
+      (first === "not fresh" && second === "fresh") ||
+      (first === "not fresh" && second === "spoiled") ||
+      (first === "spoiled" && second === "not fresh")
+    );
+  };
+
   const usableLength = Math.min(probabilities.length, labelOrder.length);
   if (usableLength === 0) {
     return {
@@ -815,6 +827,9 @@ export function parsePrediction(probabilities: number[], labelOrder: string[]): 
   const topClass = normalizeClassificationLabel(labelOrder[topPrediction.index]);
   const topConfidence = clamp(topPrediction.value, 0, 1);
   const topConfidencePercent = Math.round(clamp(topConfidence * 100, 0, 100));
+  const secondClass = ranked.length > 1
+    ? normalizeClassificationLabel(labelOrder[ranked[1].index])
+    : null;
   const secondConfidence = ranked.length > 1 ? clamp(ranked[1].value, 0, 1) : 0;
 
   const probabilitiesByLabel: Record<string, number> = {};
@@ -824,7 +839,11 @@ export function parsePrediction(probabilities: number[], labelOrder: string[]): 
   }
 
   let effectiveConfidence = topConfidence;
-  if (topConfidencePercent < LOW_CONFIDENCE_WARNING_THRESHOLD_PERCENT) {
+  if (
+    topConfidencePercent < LOW_CONFIDENCE_WARNING_THRESHOLD_PERCENT &&
+    secondClass &&
+    canMergeLowConfidencePair(topClass, secondClass)
+  ) {
     effectiveConfidence = clamp(topConfidence + secondConfidence, 0, 1);
   }
   const effectiveConfidencePercent = Math.round(clamp(effectiveConfidence * 100, 0, 100));

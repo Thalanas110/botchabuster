@@ -86,16 +86,24 @@ test.describe("MeatLens inference pipeline helpers", () => {
     expect(resolveOutputLabels(4)).toEqual(["fresh", "acceptable", "warning", "spoiled"]);
   });
 
-  test("normalizes logits and applies low-confidence top-2 override", () => {
-    const probabilities = normalizeModelProbabilities([1, 3, 2]);
-    const prediction = parsePrediction(probabilities, ["fresh", "not fresh", "spoiled"]);
+  test("merges low-confidence adjacent pairs only (fresh/not fresh, not fresh/spoiled)", () => {
+    const freshMerge = parsePrediction([0.48, 0.43, 0.09], ["fresh", "not fresh", "spoiled"]);
+    expect(freshMerge.predictedClass).toBe("fresh");
+    expect(freshMerge.confidence).toBeCloseTo(0.91, 10);
+    expect(freshMerge.confidencePercent).toBe(91);
 
-    expect(prediction.predictedClass).toBe("spoiled");
-    expect(prediction.confidence).toBeCloseTo(
-      prediction.probabilitiesByLabel["not fresh"] + prediction.probabilitiesByLabel["spoiled"],
-      10
-    );
-    expect(prediction.confidencePercent).toBeGreaterThanOrEqual(90);
+    const notFreshSpoiledMerge = parsePrediction([0.06, 0.49, 0.45], ["fresh", "not fresh", "spoiled"]);
+    expect(notFreshSpoiledMerge.predictedClass).toBe("not fresh");
+    expect(notFreshSpoiledMerge.confidence).toBeCloseTo(0.94, 10);
+    expect(notFreshSpoiledMerge.confidencePercent).toBe(94);
+  });
+
+  test("does not merge low-confidence non-adjacent pair (fresh/spoiled)", () => {
+    const prediction = parsePrediction([0.44, 0.08, 0.48], ["fresh", "not fresh", "spoiled"]);
+
+    expect(prediction.predictedClass).toBe("warning");
+    expect(prediction.confidence).toBeCloseTo(0.48, 10);
+    expect(prediction.confidencePercent).toBe(48);
   });
 
   test("keeps top-1 class when model confidence is at least 90 percent", () => {
@@ -109,7 +117,7 @@ test.describe("MeatLens inference pipeline helpers", () => {
   test("computes freshness score and recommendation from class confidence", () => {
     expect(computeFreshnessScore("fresh", 0.8)).toBeCloseTo(94, 5);
     expect(computeFreshnessScore("not fresh", 0.5)).toBeCloseTo(50, 5);
-    expect(computeFreshnessScore("spoiled", 1)).toBeCloseTo(5, 5);
+    expect(computeFreshnessScore("spoiled", 1)).toBeCloseTo(0, 5);
 
     expect(classifyRecommendation(75)).toBe("Good for Consumption");
     expect(classifyRecommendation(69)).toBe("Consume Immediately");

@@ -18,8 +18,6 @@ import {
 } from "./meatLensPipeline";
 
 export { prewarmModel } from "./mobileNetV3";
-export { calibrateFromImage } from "./calibration";
-export { loadCalibration, saveCalibration, calibrationTTLMs } from "./calibrationStore";
 
 const MODEL_LOAD_WAIT_ONLINE_MS = 45_000;
 const MODEL_LOAD_WAIT_OFFLINE_MS = 2_500;

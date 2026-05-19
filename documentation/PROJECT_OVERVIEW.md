@@ -4,10 +4,10 @@
 
 **MeatLens** is an AI-powered meat freshness inspection system designed for wet markets. It combines computer vision and machine learning to analyze meat quality using:
 
-- **Color Analysis** - Lab* color space extraction to detect freshness indicators
-- **Texture Analysis** - GLCM (Gray-Level Co-occurrence Matrix) for surface texture evaluation
-- **Calibration** - Color card calibration for accurate cross-session analysis
-- **Classification** - NMIS (New Meat Industry Standards) compliance evaluation
+- **CNN Classification** - MobileNetV3 image inference for freshness decision support
+- **Confidence-Based Decision Support** - Probability-aware guidance for inspectors
+- **Field Workflow Integration** - Capture, analyze, save, and sync inspection records
+- **Reporting & Analytics** - Admin insights with location-aware inspection trends
 
 ## Project Goals
 
@@ -111,14 +111,16 @@ npm run dev:backend    # Express server (port 3000)
 ## Core Services
 
 ### Backend Services
-- **ProfileService** - User profile management
+- **AuthService** - Authentication and authorization
+- **ProfileService** - Inspector profile management
 - **InspectionService** - Inspection record CRUD
-- **AccessCodeService** - Access code management
-- **AuthService** - Authentication & authorization
-- **ImageProcessingService** - Image analysis pipeline
-- **ColorAnalysisService** - Color-based freshness detection
-- **TextureAnalysisService** - Texture-based analysis
-- **ClassificationService** - NMIS standards evaluation
+- **AccessCodeService** - Registration access code management
+- **MarketLocationService** - Market location options management
+- **StorageService** - Inspection image upload and storage
+- **StatsService** - Dashboard statistics and rollups
+- **AuditLogService** - Encrypted audit event logging
+- **DeveloperOptionsService** - Developer option validation
+- **UserChatService** - Messaging persistence
 
 ### Frontend Integrations
 - **ProfileClient** - Profile API calls

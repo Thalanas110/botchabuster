@@ -165,13 +165,6 @@ export async function mockCommonApi(
             meat_type: "pork",
             classification: "fresh",
             confidence_score: 95,
-            lab_l: 60.87,
-            lab_a: 24.05,
-            lab_b: 16.51,
-            glcm_contrast: 0.1731,
-            glcm_correlation: 0.9761,
-            glcm_energy: 0.1988,
-            glcm_homogeneity: 0.9461,
             flagged_deviations: [],
             explanation: "Looks fresh",
             image_url: null,
@@ -245,13 +238,6 @@ export async function mockCommonApi(
         jsonResponse({
           classification: "fresh",
           confidence_score: 95,
-          lab_values: { l: 60.87, a: 24.05, b: 16.51 },
-          glcm_features: {
-            contrast: 0.1731,
-            correlation: 0.9761,
-            energy: 0.1988,
-            homogeneity: 0.9461,
-          },
           flagged_deviations: [],
           explanation: "Backend fallback",
         })

@@ -1,6 +1,6 @@
 # MeatLens Backend
 
-Node.js/Express backend for meat freshness analysis using OpenCV.
+Node.js/Express backend for MeatLens authentication, inspection, storage, and admin APIs.
 
 ## Setup
 
@@ -29,11 +29,11 @@ backend/
 │   ├── controllers/
 │   │   └── AnalysisController.ts
 │   ├── services/
-│   │   ├── ImageProcessingService.ts   # OpenCV operations
-│   │   ├── ColorAnalysisService.ts     # Lab* color extraction
-│   │   ├── TextureAnalysisService.ts   # GLCM feature extraction
-│   │   ├── ClassificationService.ts    # NMIS standards evaluation
-│   │   └── CalibrationService.ts       # Color card calibration
+│   │   ├── StorageService.ts           # Supabase image storage
+│   │   ├── InspectionService.ts        # Inspection record operations
+│   │   ├── ProfileService.ts           # Profile management
+│   │   ├── AccessCodeService.ts        # Registration code management
+│   │   └── StatsService.ts             # Admin dashboard aggregates
 │   ├── models/
 │   │   └── InspectionResult.ts
 │   ├── middleware/

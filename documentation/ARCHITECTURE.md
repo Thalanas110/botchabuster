@@ -100,14 +100,14 @@ MeatLens follows a **client-server architecture** with a React frontend communic
    └─> Updates state, shows image
 
 9. User analyzes image
-   └─> Frontend calls analysisClient.analyze()
+   └─> Frontend runs analyzeOffline() with MobileNetV3 ONNX
 
-10. Backend Analysis Pipeline
-    └─> ImageProcessingService loads image
-    └─> ColorAnalysisService extracts Lab* values
-    └─> TextureAnalysisService computes GLCM
-    └─> ClassificationService evaluates NMIS
-    └─> Returns freshness score
+10. Frontend CNN Analysis Pipeline
+    └─> createCroppedResizedImageFile preprocesses capture
+    └─> MobileNetV3 ONNX infers freshness class probabilities
+    └─> Decision support computes confidence and recommendation
+    └─> Result is prepared for save and sync flows
+    └─> Returns classification, confidence, and explanation
 
 11. Frontend displays results
     └─> AnalysisResultCard shows metrics
@@ -197,18 +197,17 @@ backend/src/
 │   ├── StatsController.ts
 │   ├── AuthController.ts
 │   └── ChatController.ts
-├── services/
-│   ├── StorageService.ts     # Supabase storage
-│   ├── ImageProcessingService.ts  # Image ops
-│   ├── ColorAnalysisService.ts    # Lab* analysis
-│   ├── TextureAnalysisService.ts  # GLCM analysis
-│   ├── ClassificationService.ts   # NMIS eval
-│   ├── ProfileService.ts          # DB ops
-│   ├── InspectionService.ts
-│   ├── AccessCodeService.ts
-│   ├── StatsService.ts
-│   ├── AuthService.ts
-│   └── CalibrationService.ts      # Color calibration
+services/
+  - StorageService.ts            # Supabase storage
+  - InspectionService.ts         # Inspection persistence
+  - ProfileService.ts            # Profile operations
+  - AccessCodeService.ts         # Access code management
+  - MarketLocationService.ts     # Market location operations
+  - StatsService.ts              # Dashboard analytics
+  - AuthService.ts               # Auth and access control
+  - AuditLogService.ts           # Encrypted audit logging
+  - DeveloperOptionsService.ts   # Developer option checks
+  - UserChatService.ts           # In-app chat persistence
 ├── routes/
 │   ├── upload.ts
 │   ├── analysis.ts
@@ -280,17 +279,17 @@ User requests analysis
     ↓
 AnalysisClient.analyzeImage(imageUrl, meatType)
     ↓
-POST /api/analysis/analyze
+Client-side ONNX inference (no server classifier call)
     ↓
-AnalysisController calls services in sequence:
-    ├─ ImageProcessingService
-    │   └─ Downloads & loads image from URL
-    ├─ ColorAnalysisService
-    │   └─ Extracts Lab* color values
-    ├─ TextureAnalysisService
-    │   └─ Computes GLCM texture features
-    └─ ClassificationService
-        └─ Evaluates NMIS freshness score
+Frontend analyzeOffline() runs in sequence:
+    ├─ createCroppedResizedImageFile
+    │   └─ Crops guide box and resizes image to model input
+    ├─ classifyWithMobileNetV3
+    │   └─ Runs CNN inference for freshness probabilities
+    ├─ computeFreshnessScore / classifyRecommendation
+    │   └─ Derives freshness score and recommendation
+    └─ createInspection API call
+        └─ Persists classification and confidence to backend
     ↓
 Returns analysis result JSON
 ```

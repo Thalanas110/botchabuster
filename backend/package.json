@@ -1,7 +1,7 @@
 {
   "name": "MeatLens-backend",
   "version": "1.0.0",
-  "description": "MeatLens backend - OpenCV meat freshness analysis",
+  "description": "MeatLens backend - API services for CNN-based meat freshness inspection",
   "main": "dist/server.js",
   "scripts": {
     "dev": "tsx watch src/server.ts",

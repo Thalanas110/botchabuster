@@ -85,9 +85,43 @@ const MEAT_TYPE_LABELS = {
 const ANALYTICS_DAYS = 14;
 const MAX_ANALYTICS_ITEMS = 6;
 const REPORT_DEFAULT_RANGE_DAYS = 30;
+const REPORT_PDF_DETAIL_ROW_LIMIT = 60;
 const UNKNOWN_INSPECTOR_LABEL = "Unknown Inspector";
 const UNSPECIFIED_LOCATION_LABEL = "Unspecified";
 const REPORT_CLASSIFICATIONS: FreshnessClassification[] = ["fresh", "not fresh", "acceptable", "warning", "spoiled"];
+
+type ReportRow = {
+  id: string;
+  createdAt: string;
+  capturedAt: string | null;
+  inspector: string;
+  inspectorEmail: string;
+  inspectorCode: string;
+  location: string;
+  profileLocation: string;
+  meatType: string;
+  classification: FreshnessClassification;
+  confidenceScore: number;
+  flaggedDeviations: string;
+  explanation: string;
+  inspectorNotes: string;
+  imageUrl: string;
+};
+
+type ReportLocationBreakdown = {
+  location: string;
+  count: number;
+  spoiledCount: number;
+  spoiledRate: number;
+  averageConfidence: number;
+};
+
+type ReportDailyTrendRow = {
+  date: string;
+  count: number;
+  spoiledCount: number;
+  averageConfidence: number;
+};
 
 const tabs = [
   { key: "overview" as const, label: "Overview", icon: LayoutGrid },
@@ -123,6 +157,14 @@ const toCsvValue = (value: unknown): string => {
     return `"${raw.replaceAll('"', '""')}"`;
   }
   return raw;
+};
+
+const getOptionalText = (value: string | null | undefined): string => value?.trim() || "-";
+
+const formatReportDateTime = (value: string | null | undefined): string => {
+  if (!value) return "-";
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : format(date, "yyyy-MM-dd HH:mm:ss");
 };
 
 const parsePayloadText = (payload: Record<string, unknown>, key: string): string => {
@@ -575,35 +617,54 @@ const AdminDashboard = () => {
     return counts;
   }, [reportFilteredInspections]);
 
-  const reportRows = useMemo(() => {
+  const reportRows = useMemo<ReportRow[]>(() => {
     return reportFilteredInspections.map((inspection) => {
       const profile = inspection.user_id ? profileById.get(inspection.user_id) : undefined;
 
       return {
         id: inspection.id,
         createdAt: inspection.created_at,
+        capturedAt: inspection.captured_at ?? null,
         inspector: getInspectorLabel(profile),
+        inspectorEmail: getOptionalText(profile?.email),
+        inspectorCode: getOptionalText(profile?.inspector_code),
         location: getLocationLabel(inspection.location, profile),
+        profileLocation: getOptionalText(profile?.location),
         meatType: inspection.meat_type,
         classification: inspection.classification,
         confidenceScore: inspection.confidence_score,
+        flaggedDeviations: inspection.flagged_deviations.length > 0 ? inspection.flagged_deviations.join("; ") : "-",
+        explanation: getOptionalText(inspection.explanation),
+        inspectorNotes: getOptionalText(inspection.inspector_notes),
+        imageUrl: getOptionalText(inspection.image_url),
       };
     });
   }, [reportFilteredInspections, profileById]);
 
   const reportSummary = useMemo(() => {
-    if (reportFilteredInspections.length === 0) {
-      return { total: 0, averageConfidence: 0, spoiledRate: 0 };
+    if (reportRows.length === 0) {
+      return {
+        total: 0,
+        averageConfidence: 0,
+        spoiledRate: 0,
+        uniqueInspectors: 0,
+        uniqueLocations: 0,
+        flaggedRecords: 0,
+      };
     }
 
-    const total = reportFilteredInspections.length;
+    const total = reportRows.length;
     const averageConfidence = Math.round(
-      reportFilteredInspections.reduce((sum, inspection) => sum + inspection.confidence_score, 0) / total,
+      reportRows.reduce((sum, row) => sum + row.confidenceScore, 0) / total,
     );
-    const spoiledRate = Math.round((reportClassCounts.spoiled / total) * 100);
+    const spoiledCount = reportRows.filter((row) => row.classification === "spoiled").length;
+    const spoiledRate = Math.round((spoiledCount / total) * 100);
+    const uniqueInspectors = new Set(reportRows.map((row) => row.inspector)).size;
+    const uniqueLocations = new Set(reportRows.map((row) => row.location)).size;
+    const flaggedRecords = reportRows.filter((row) => row.flaggedDeviations !== "-").length;
 
-    return { total, averageConfidence, spoiledRate };
-  }, [reportFilteredInspections, reportClassCounts.spoiled]);
+    return { total, averageConfidence, spoiledRate, uniqueInspectors, uniqueLocations, flaggedRecords };
+  }, [reportRows]);
 
   const reportTopInspectors = useMemo(() => {
     const aggregates = new Map<string, { count: number; totalConfidence: number }>();
@@ -636,6 +697,66 @@ const AdminDashboard = () => {
       .map(([meatType, count]) => ({ meatType, count }))
       .sort((left, right) => right.count - left.count || left.meatType.localeCompare(right.meatType));
   }, [reportRows]);
+
+  const reportTopLocations = useMemo<ReportLocationBreakdown[]>(() => {
+    const aggregates = new Map<string, { count: number; spoiledCount: number; totalConfidence: number }>();
+
+    reportRows.forEach((row) => {
+      const current = aggregates.get(row.location) ?? { count: 0, spoiledCount: 0, totalConfidence: 0 };
+      current.count += 1;
+      current.totalConfidence += row.confidenceScore;
+      if (row.classification === "spoiled") {
+        current.spoiledCount += 1;
+      }
+      aggregates.set(row.location, current);
+    });
+
+    return Array.from(aggregates.entries())
+      .map(([location, entry]) => ({
+        location,
+        count: entry.count,
+        spoiledCount: entry.spoiledCount,
+        spoiledRate: Math.round((entry.spoiledCount / entry.count) * 100),
+        averageConfidence: Math.round(entry.totalConfidence / entry.count),
+      }))
+      .sort((left, right) => right.count - left.count || right.spoiledRate - left.spoiledRate || left.location.localeCompare(right.location))
+      .slice(0, 10);
+  }, [reportRows]);
+
+  const reportDailyTrend = useMemo<ReportDailyTrendRow[]>(() => {
+    const aggregates = new Map<string, { count: number; spoiledCount: number; totalConfidence: number }>();
+
+    reportRows.forEach((row) => {
+      const key = format(new Date(row.createdAt), "yyyy-MM-dd");
+      const current = aggregates.get(key) ?? { count: 0, spoiledCount: 0, totalConfidence: 0 };
+      current.count += 1;
+      current.totalConfidence += row.confidenceScore;
+      if (row.classification === "spoiled") {
+        current.spoiledCount += 1;
+      }
+      aggregates.set(key, current);
+    });
+
+    return Array.from(aggregates.entries())
+      .sort((left, right) => left[0].localeCompare(right[0]))
+      .map(([date, entry]) => ({
+        date,
+        count: entry.count,
+        spoiledCount: entry.spoiledCount,
+        averageConfidence: Math.round(entry.totalConfidence / entry.count),
+      }));
+  }, [reportRows]);
+
+  const reportClassShare = useMemo(() => {
+    return REPORT_CLASSIFICATIONS.map((classification) => {
+      const count = reportClassCounts[classification];
+      return {
+        classification,
+        count,
+        share: reportSummary.total > 0 ? Math.round((count / reportSummary.total) * 100) : 0,
+      };
+    });
+  }, [reportClassCounts, reportSummary.total]);
 
   const avgConfidence = useMemo(() => {
     if (inspections.length === 0) return 0;
@@ -741,21 +862,37 @@ const AdminDashboard = () => {
 
     const headers = [
       "ID",
-      "Date",
+      "Created At",
+      "Captured At",
       "Inspector",
+      "Inspector Email",
+      "Inspector Code",
       "Location",
+      "Profile Location",
       "Meat Type",
       "Classification",
       "Confidence",
+      "Flagged Deviations",
+      "Explanation",
+      "Inspector Notes",
+      "Image URL",
     ];
     const rows = reportRows.map((row) => [
       row.id,
-      row.createdAt,
+      formatReportDateTime(row.createdAt),
+      formatReportDateTime(row.capturedAt),
       row.inspector,
+      row.inspectorEmail,
+      row.inspectorCode,
       row.location,
+      row.profileLocation,
       row.meatType,
       row.classification,
       row.confidenceScore,
+      row.flaggedDeviations,
+      row.explanation,
+      row.inspectorNotes,
+      row.imageUrl,
     ]);
     const csv = [headers, ...rows]
       .map((record) => record.map((value) => toCsvValue(value)).join(","))
@@ -779,10 +916,16 @@ const AdminDashboard = () => {
         totalInspections: reportSummary.total,
         averageConfidence: reportSummary.averageConfidence,
         spoiledRate: reportSummary.spoiledRate,
+        uniqueInspectors: reportSummary.uniqueInspectors,
+        uniqueLocations: reportSummary.uniqueLocations,
+        recordsWithDeviations: reportSummary.flaggedRecords,
         classificationBreakdown: reportClassCounts,
+        classificationShare: reportClassShare,
       },
       topInspectors: reportTopInspectors,
+      topLocations: reportTopLocations,
       meatTypeBreakdown: reportByMeatType,
+      dailyTrend: reportDailyTrend,
       inspections: reportRows,
     };
 
@@ -795,12 +938,18 @@ const AdminDashboard = () => {
     if (!validateReportRange()) return;
 
     const generatedAt = format(new Date(), "MMM d, yyyy h:mm a");
-    const classRows = REPORT_CLASSIFICATIONS
-      .map((classification) => {
-        const count = reportClassCounts[classification];
-        const share = reportSummary.total > 0 ? Math.round((count / reportSummary.total) * 100) : 0;
-        return `<tr><td>${escapeHtml(classification)}</td><td>${count}</td><td>${share}%</td></tr>`;
+    const generatedBy = user?.email ?? user?.id ?? "admin";
+    const classRows = reportClassShare
+      .map((entry) => {
+        return `<tr><td>${escapeHtml(entry.classification)}</td><td>${entry.count}</td><td>${entry.share}%</td></tr>`;
       })
+      .join("");
+    const classChartRows = reportClassShare
+      .map((entry) => `
+        <div class="bar-row">
+          <div class="bar-label"><span>${escapeHtml(entry.classification)}</span><span>${entry.count} (${entry.share}%)</span></div>
+          <div class="bar-track"><div class="bar-fill" style="width:${entry.share}%; background:${PIE_COLORS[entry.classification]};"></div></div>
+        </div>`)
       .join("");
 
     const inspectorRows = reportTopInspectors.length > 0
@@ -809,11 +958,69 @@ const AdminDashboard = () => {
         .join("")
       : '<tr><td colspan="3">No inspector data in this range.</td></tr>';
 
+    const locationRows = reportTopLocations.length > 0
+      ? reportTopLocations
+        .map((entry) => `<tr><td>${escapeHtml(entry.location)}</td><td>${entry.count}</td><td>${entry.spoiledCount}</td><td>${entry.spoiledRate}%</td><td>${entry.averageConfidence}%</td></tr>`)
+        .join("")
+      : '<tr><td colspan="5">No location data in this range.</td></tr>';
+
     const meatTypeRows = reportByMeatType.length > 0
       ? reportByMeatType
         .map((entry) => `<tr><td>${escapeHtml(entry.meatType)}</td><td>${entry.count}</td></tr>`)
         .join("")
       : '<tr><td colspan="2">No meat type data in this range.</td></tr>';
+
+    const dailyRows = reportDailyTrend.length > 0
+      ? reportDailyTrend
+        .map((entry) => `<tr><td>${escapeHtml(entry.date)}</td><td>${entry.count}</td><td>${entry.spoiledCount}</td><td>${entry.averageConfidence}%</td></tr>`)
+        .join("")
+      : '<tr><td colspan="4">No daily trend data in this range.</td></tr>';
+
+    const maxLocationCount = reportTopLocations.reduce((max, entry) => Math.max(max, entry.count), 0);
+    const locationChartRows = reportTopLocations.length > 0
+      ? reportTopLocations
+        .map((entry) => {
+          const width = maxLocationCount > 0 ? Math.round((entry.count / maxLocationCount) * 100) : 0;
+          return `
+          <div class="bar-row">
+            <div class="bar-label"><span>${escapeHtml(entry.location)}</span><span>${entry.count} inspections</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${width}%; background:#2563eb;"></div></div>
+          </div>`;
+        })
+        .join("")
+      : '<p class="note">No location chart data in this range.</p>';
+
+    const maxDailyCount = reportDailyTrend.reduce((max, entry) => Math.max(max, entry.count), 0);
+    const dailyChartRows = reportDailyTrend.length > 0
+      ? reportDailyTrend
+        .map((entry) => {
+          const width = maxDailyCount > 0 ? Math.round((entry.count / maxDailyCount) * 100) : 0;
+          return `
+          <div class="bar-row">
+            <div class="bar-label"><span>${escapeHtml(entry.date)}</span><span>${entry.count} inspections</span></div>
+            <div class="bar-track"><div class="bar-fill" style="width:${width}%; background:#0891b2;"></div></div>
+          </div>`;
+        })
+        .join("")
+      : '<p class="note">No daily chart data in this range.</p>';
+
+    const detailRows = reportRows
+      .slice(0, REPORT_PDF_DETAIL_ROW_LIMIT)
+      .map((row) => `
+        <tr>
+          <td>${escapeHtml(formatReportDateTime(row.createdAt))}</td>
+          <td>${escapeHtml(row.inspector)}</td>
+          <td>${escapeHtml(row.location)}</td>
+          <td>${escapeHtml(row.meatType)}</td>
+          <td>${escapeHtml(row.classification)}</td>
+          <td>${row.confidenceScore}%</td>
+          <td>${escapeHtml(row.flaggedDeviations)}</td>
+          <td>${escapeHtml(row.inspectorNotes)}</td>
+        </tr>`)
+      .join("");
+    const detailRowsNotice = reportRows.length > REPORT_PDF_DETAIL_ROW_LIMIT
+      ? `<p class="note">Showing first ${REPORT_PDF_DETAIL_ROW_LIMIT} of ${reportRows.length} inspection records in this PDF. Use CSV or JSON for full raw detail.</p>`
+      : "";
 
     const html = `
 <!doctype html>
@@ -851,7 +1058,7 @@ const AdminDashboard = () => {
       .summary-grid {
         margin-top: 18px;
         display: grid;
-        grid-template-columns: repeat(3, minmax(0, 1fr));
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
         gap: 12px;
       }
       .summary-card {
@@ -880,6 +1087,36 @@ const AdminDashboard = () => {
         text-transform: uppercase;
         letter-spacing: 0.08em;
       }
+      .note {
+        margin: 8px 0 0;
+        color: #64748b;
+        font-size: 11px;
+      }
+      .two-column {
+        display: grid;
+        gap: 16px;
+      }
+      .bar-row {
+        margin-bottom: 10px;
+      }
+      .bar-label {
+        display: flex;
+        justify-content: space-between;
+        gap: 8px;
+        margin-bottom: 4px;
+        font-size: 11px;
+        color: #334155;
+      }
+      .bar-track {
+        height: 8px;
+        border-radius: 999px;
+        background: #e2e8f0;
+        overflow: hidden;
+      }
+      .bar-fill {
+        height: 8px;
+        border-radius: 999px;
+      }
       table {
         width: 100%;
         border-collapse: collapse;
@@ -897,6 +1134,11 @@ const AdminDashboard = () => {
         text-transform: uppercase;
         letter-spacing: 0.08em;
       }
+      @media (min-width: 960px) {
+        .two-column {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
       @media print {
         body {
           background: white;
@@ -913,31 +1155,67 @@ const AdminDashboard = () => {
   <body>
     <article class="sheet">
       <h1>MeatLens Admin Report</h1>
-      <p class="meta">Range: ${escapeHtml(reportStartDate)} to ${escapeHtml(reportEndDate)} | Generated: ${escapeHtml(generatedAt)}</p>
+      <p class="meta">Range: ${escapeHtml(reportStartDate)} to ${escapeHtml(reportEndDate)} | Generated: ${escapeHtml(generatedAt)} | Generated By: ${escapeHtml(generatedBy)}</p>
       <div class="summary-grid">
         <div class="summary-card"><span>Total Inspections</span><strong>${reportSummary.total}</strong></div>
         <div class="summary-card"><span>Average Confidence</span><strong>${reportSummary.averageConfidence}%</strong></div>
         <div class="summary-card"><span>Spoiled Rate</span><strong>${reportSummary.spoiledRate}%</strong></div>
+        <div class="summary-card"><span>Unique Inspectors</span><strong>${reportSummary.uniqueInspectors}</strong></div>
+        <div class="summary-card"><span>Unique Locations</span><strong>${reportSummary.uniqueLocations}</strong></div>
+        <div class="summary-card"><span>Records With Deviations</span><strong>${reportSummary.flaggedRecords}</strong></div>
       </div>
       <section>
-        <h2>Classification Breakdown</h2>
+        <h2>Classification Breakdown (Chart + Table)</h2>
+        <div>${classChartRows}</div>
         <table>
           <thead><tr><th>Classification</th><th>Count</th><th>Share</th></tr></thead>
           <tbody>${classRows}</tbody>
         </table>
       </section>
       <section>
-        <h2>Top Inspectors</h2>
-        <table>
-          <thead><tr><th>Inspector</th><th>Inspections</th><th>Avg Confidence</th></tr></thead>
-          <tbody>${inspectorRows}</tbody>
-        </table>
+        <div class="two-column">
+          <div>
+            <h2>Top Inspectors</h2>
+            <table>
+              <thead><tr><th>Inspector</th><th>Inspections</th><th>Avg Confidence</th></tr></thead>
+              <tbody>${inspectorRows}</tbody>
+            </table>
+          </div>
+          <div>
+            <h2>Top Locations</h2>
+            <div>${locationChartRows}</div>
+            <table>
+              <thead><tr><th>Location</th><th>Inspections</th><th>Spoiled</th><th>Spoiled Rate</th><th>Avg Confidence</th></tr></thead>
+              <tbody>${locationRows}</tbody>
+            </table>
+          </div>
+        </div>
       </section>
       <section>
-        <h2>Meat Type Distribution</h2>
+        <div class="two-column">
+          <div>
+            <h2>Meat Type Distribution</h2>
+            <table>
+              <thead><tr><th>Meat Type</th><th>Inspections</th></tr></thead>
+              <tbody>${meatTypeRows}</tbody>
+            </table>
+          </div>
+          <div>
+            <h2>Daily Inspection Trend</h2>
+            <div>${dailyChartRows}</div>
+            <table>
+              <thead><tr><th>Date</th><th>Inspections</th><th>Spoiled</th><th>Avg Confidence</th></tr></thead>
+              <tbody>${dailyRows}</tbody>
+            </table>
+          </div>
+        </div>
+      </section>
+      <section>
+        <h2>Inspection Detail</h2>
+        ${detailRowsNotice}
         <table>
-          <thead><tr><th>Meat Type</th><th>Inspections</th></tr></thead>
-          <tbody>${meatTypeRows}</tbody>
+          <thead><tr><th>Created At</th><th>Inspector</th><th>Location</th><th>Meat Type</th><th>Class</th><th>Confidence</th><th>Flagged Deviations</th><th>Inspector Notes</th></tr></thead>
+          <tbody>${detailRows}</tbody>
         </table>
       </section>
     </article>

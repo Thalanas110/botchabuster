@@ -19,7 +19,5 @@ test("hides technical metric sections when detailed results are disabled", async
   await expect(page.getByText(/Confidence/i).first()).toBeVisible();
   await expect(page.getByRole("heading", { name: "Analysis", exact: true })).toBeVisible();
 
-  await expect(page.getByRole("heading", { name: "Lab* Color Space" })).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "GLCM Texture" })).toHaveCount(0);
   await expect(page.getByText(/Flagged Deviations/i, { exact: true })).toHaveCount(0);
 });

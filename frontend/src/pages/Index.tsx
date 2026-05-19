@@ -1,6 +1,5 @@
 ﻿import { useState, useCallback, useRef, useEffect } from "react";
 import { CameraCapture, type CapturedImagePayload } from "@/components/CameraCapture";
-import { CalibrationBanner } from "@/components/CalibrationBanner";
 import { AnalysisResultCard } from "@/components/AnalysisResultCard";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -429,8 +428,6 @@ const InspectPage = () => {
                 </SelectContent>
               </Select>
             </div>
-
-            <CalibrationBanner />
 
             <CameraCapture
               onCapture={handleCapture}

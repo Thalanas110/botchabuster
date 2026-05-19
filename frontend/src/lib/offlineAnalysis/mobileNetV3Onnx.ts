@@ -49,41 +49,6 @@ if (ENV_METADATA_PATH.length > 0 && !ENV_MOBILE_METADATA_PATH) {
   console.warn("[Model][ONNX] Ignoring VITE_MODEL_METADATA_PATH because it does not appear to be MobileNetV3 metadata.");
 }
 
-const MOBILE_MODEL_CANDIDATES = [
-  "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
-  "/model/meatlens_mobilenetv3small_cnn_only.onnx",
-  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
-  "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only.onnx",
-  "/models/mobilenetv3_meat/model.onnx",
-];
-const MODEL_CANDIDATE_PATHS = Array.from(
-  new Set(
-    [
-      ...MOBILE_MODEL_CANDIDATES,
-      ENV_MOBILE_MODEL_PATH,
-    ].filter((path) => path.length > 0)
-  )
-);
-
-const MODEL_METADATA_CANDIDATE_PATHS = [
-  "/model/NEW-meatlens_best_model_metadata.json",
-  "/model/NEW-meatlens_mobilenetv3small_cnn_only_metadata.json",
-  "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
-  "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
-  "/models/mobilenetv3_meat/NEW-meatlens_best_model_metadata.json",
-  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cnn_only_metadata.json",
-  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
-  "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
-  "/models/mobilenetv3_meat/meatlens_best_model_metadata.json",
-  "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only_metadata.json",
-  "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
-  "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
-  "/model/meatlens_mobilenetv3small_metadata.json",
-  ENV_MOBILE_METADATA_PATH,
-  "/model/meatlens_best_model_metadata.json",
-  "/models/meatlens_best_model_metadata.json",
-].filter((path) => path.length > 0);
-
 const FALLBACK_IMAGE_SIZE = 224;
 const RETRY_INTERVAL_MS = 15_000;
 const LEGACY_ALLOWED_LABELS = new Set<FreshnessClassification>([
@@ -94,12 +59,79 @@ const LEGACY_ALLOWED_LABELS = new Set<FreshnessClassification>([
   "warning",
 ]);
 
+type ModelPreprocessContract = "legacy" | "segmented_center_roi";
+export type MobileNetModelVariant = "default" | "seed123_model2";
+
+interface ModelAssetProfile {
+  variant: MobileNetModelVariant;
+  displayName: string;
+  preprocessContract: ModelPreprocessContract;
+  modelCandidatePaths: string[];
+  metadataCandidatePaths: string[];
+  defaultMetadata: MeatLensModelMetadata;
+}
+
 const DEFAULT_MODEL_METADATA: MeatLensModelMetadata = {
   backbone: "MobileNetV3Small",
-  preprocess_function_name: "mobilenet_v3.preprocess_input",
+  preprocess_function_name: "identity",
   input_size: FALLBACK_IMAGE_SIZE,
   image_crop_mode: "center_crop",
   label_order: ["fresh", "not fresh", "spoiled"],
+};
+
+const MODEL_ASSET_PROFILES: Record<MobileNetModelVariant, ModelAssetProfile> = {
+  default: {
+    variant: "default",
+    displayName: "MobileNetV3Small seed42",
+    preprocessContract: "legacy",
+    modelCandidatePaths: Array.from(
+      new Set(
+        [
+          "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
+          "/model/meatlens_mobilenetv3small_cnn_only.onnx",
+          "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only.onnx",
+          "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only.onnx",
+          "/models/mobilenetv3_meat/model.onnx",
+          ENV_MOBILE_MODEL_PATH,
+        ].filter((path) => path.length > 0)
+      )
+    ),
+    metadataCandidatePaths: [
+      "/model/NEW-meatlens_best_model_metadata.json",
+      "/model/NEW-meatlens_mobilenetv3small_cnn_only_metadata.json",
+      "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+      "/model/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
+      "/models/mobilenetv3_meat/NEW-meatlens_best_model_metadata.json",
+      "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cnn_only_metadata.json",
+      "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+      "/models/mobilenetv3_meat/NEW-meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
+      "/models/mobilenetv3_meat/meatlens_best_model_metadata.json",
+      "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cnn_only_metadata.json",
+      "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata.json",
+      "/models/mobilenetv3_meat/meatlens_mobilenetv3small_cross_rotation_fold1_seed42_cnn_only_metadata (1).json",
+      "/model/meatlens_mobilenetv3small_metadata.json",
+      ENV_MOBILE_METADATA_PATH,
+      "/model/meatlens_best_model_metadata.json",
+      "/models/meatlens_best_model_metadata.json",
+    ].filter((path) => path.length > 0),
+    defaultMetadata: { ...DEFAULT_MODEL_METADATA },
+  },
+  seed123_model2: {
+    variant: "seed123_model2",
+    displayName: "MobileNetV3Small seed123 model2",
+    preprocessContract: "segmented_center_roi",
+    modelCandidatePaths: [
+      "/model/model2/meatlens_final_8samples_cnn_only_mobilenetv3small_seed123.onnx",
+    ],
+    metadataCandidatePaths: [
+      "/model/model2/meatlens_final_8samples_cnn_only_mobilenetv3small_seed123_metadata.json",
+    ],
+    defaultMetadata: {
+      ...DEFAULT_MODEL_METADATA,
+      image_crop_mode: "preprocessed_hsv_lab_threshold_roi_224",
+      label_order: ["fresh", "not fresh", "spoiled"],
+    },
+  },
 };
 
 // Keeps the import type-safe while still lazy-loading the runtime.
@@ -148,7 +180,61 @@ let session: OnnxSession | null = null;
 let loadedModelPath: string | null = null;
 let loadPromise: Promise<boolean> | null = null;
 let metadataPromise: Promise<MeatLensModelMetadata> | null = null;
+let metadataPromiseVariant: MobileNetModelVariant | null = null;
 let nextRetryAt = 0;
+let loadGeneration = 0;
+let activeModelVariant: MobileNetModelVariant = "default";
+
+function getModelProfile(variant: MobileNetModelVariant): ModelAssetProfile {
+  return MODEL_ASSET_PROFILES[variant];
+}
+
+function resetRuntimeModelState(): void {
+  loadPromise = null;
+  metadataPromise = null;
+  metadataPromiseVariant = null;
+  loadedModelPath = null;
+  nextRetryAt = 0;
+}
+
+async function releaseSession(activeSession: OnnxSession | null): Promise<void> {
+  if (!activeSession) {
+    return;
+  }
+
+  const sessionWithRelease = activeSession as OnnxSession & { release?: () => Promise<void> };
+  if (typeof sessionWithRelease.release !== "function") {
+    return;
+  }
+
+  try {
+    await sessionWithRelease.release();
+  } catch (error) {
+    console.warn("[Model][ONNX] Failed to release previous session:", error);
+  }
+}
+
+export function setActiveMobileNetModelVariant(variant: MobileNetModelVariant): void {
+  if (activeModelVariant === variant) {
+    return;
+  }
+
+  const previousSession = session;
+  activeModelVariant = variant;
+  loadGeneration += 1;
+  session = null;
+  resetRuntimeModelState();
+  void releaseSession(previousSession);
+  console.info(`[Model][ONNX] Switched model variant to ${getModelProfile(variant).displayName}`);
+}
+
+export function getActiveMobileNetModelVariant(): MobileNetModelVariant {
+  return activeModelVariant;
+}
+
+export function getActiveModelPreprocessContract(): ModelPreprocessContract {
+  return getModelProfile(activeModelVariant).preprocessContract;
+}
 
 function isPositiveNumber(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -331,9 +417,12 @@ function buildCroppedImageData(
   return context.getImageData(0, 0, targetWidth, targetHeight);
 }
 
-function sanitizeMetadata(payload: unknown): MeatLensModelMetadata {
+function sanitizeMetadata(
+  payload: unknown,
+  defaultMetadata: MeatLensModelMetadata
+): MeatLensModelMetadata {
   if (!payload || typeof payload !== "object") {
-    return { ...DEFAULT_MODEL_METADATA };
+    return { ...defaultMetadata };
   }
 
   const candidate = payload as Record<string, unknown>;
@@ -342,30 +431,30 @@ function sanitizeMetadata(payload: unknown): MeatLensModelMetadata {
     : undefined;
 
   return {
-    backbone: typeof candidate.backbone === "string" ? candidate.backbone : DEFAULT_MODEL_METADATA.backbone,
+    backbone: typeof candidate.backbone === "string" ? candidate.backbone : defaultMetadata.backbone,
     preprocess_function_name:
       typeof candidate.preprocess_function_name === "string"
         ? candidate.preprocess_function_name
-        : DEFAULT_MODEL_METADATA.preprocess_function_name,
+        : defaultMetadata.preprocess_function_name,
     input_size:
       typeof candidate.input_size === "number" || Array.isArray(candidate.input_size)
         ? (candidate.input_size as MeatLensModelMetadata["input_size"])
-        : DEFAULT_MODEL_METADATA.input_size,
+        : defaultMetadata.input_size,
     image_crop_mode:
       typeof candidate.image_crop_mode === "string"
         ? candidate.image_crop_mode
-        : DEFAULT_MODEL_METADATA.image_crop_mode,
-    label_order: labelOrder && labelOrder.length > 0 ? labelOrder : DEFAULT_MODEL_METADATA.label_order,
+        : defaultMetadata.image_crop_mode,
+    label_order: labelOrder && labelOrder.length > 0 ? labelOrder : defaultMetadata.label_order,
   };
 }
 
-async function loadModelMetadata(): Promise<MeatLensModelMetadata> {
-  if (metadataPromise) {
+async function loadModelMetadata(profile: ModelAssetProfile): Promise<MeatLensModelMetadata> {
+  if (metadataPromise && metadataPromiseVariant === profile.variant) {
     return metadataPromise;
   }
 
   metadataPromise = (async () => {
-    for (const path of MODEL_METADATA_CANDIDATE_PATHS) {
+    for (const path of profile.metadataCandidatePaths) {
       try {
         const response = await fetch(path, { cache: "no-cache" });
         if (!response.ok) {
@@ -373,7 +462,7 @@ async function loadModelMetadata(): Promise<MeatLensModelMetadata> {
         }
 
         const metadataJson = await response.json();
-        const parsedMetadata = sanitizeMetadata(metadataJson);
+        const parsedMetadata = sanitizeMetadata(metadataJson, profile.defaultMetadata);
         console.info(`[Model][ONNX] Loaded metadata from ${path}`);
         return parsedMetadata;
       } catch {
@@ -381,9 +470,10 @@ async function loadModelMetadata(): Promise<MeatLensModelMetadata> {
       }
     }
 
-    console.info("[Model][ONNX] Metadata file not found; using fallback defaults.");
-    return { ...DEFAULT_MODEL_METADATA };
+    console.info(`[Model][ONNX] Metadata file not found for ${profile.displayName}; using fallback defaults.`);
+    return { ...profile.defaultMetadata };
   })();
+  metadataPromiseVariant = profile.variant;
 
   return metadataPromise;
 }
@@ -406,26 +496,37 @@ async function getOrtModule(): Promise<OrtModule> {
   return ortModule;
 }
 
-async function tryLoadModelFromCandidates(ort: OrtModule): Promise<boolean> {
+async function tryLoadModelFromCandidates(
+  ort: OrtModule,
+  profile: ModelAssetProfile,
+  generation: number
+): Promise<boolean> {
   let lastError: unknown;
 
-  for (const modelPath of MODEL_CANDIDATE_PATHS) {
+  for (const modelPath of profile.modelCandidatePaths) {
     try {
-      session = await ort.InferenceSession.create(modelPath, {
+      const createdSession = await ort.InferenceSession.create(modelPath, {
         executionProviders: ["wasm"],
         // "all" can noticeably increase first-load session build time on low-end
         // devices. "basic" trades a little inference speed for faster startup.
         graphOptimizationLevel: "basic",
       });
+
+      if (generation !== loadGeneration || profile.variant !== activeModelVariant) {
+        await releaseSession(createdSession);
+        return false;
+      }
+
+      session = createdSession;
       loadedModelPath = modelPath;
-      console.info(`[Model][ONNX] Loaded model from ${modelPath}`);
+      console.info(`[Model][ONNX] Loaded model from ${modelPath} (${profile.displayName})`);
       return true;
     } catch (error) {
       lastError = error;
     }
   }
 
-  console.info("[Model][ONNX] Model not available yet, using fallback path.", lastError);
+  console.info(`[Model][ONNX] Model not available yet for ${profile.displayName}.`, lastError);
   return false;
 }
 
@@ -442,11 +543,17 @@ export async function loadMobileNetV3Model(options: LoadModelOptions = {}): Prom
     return false;
   }
 
+  const profile = getModelProfile(activeModelVariant);
+  const generation = loadGeneration;
+
   loadPromise = (async () => {
     try {
       const ort = await getOrtModule();
-      await loadModelMetadata();
-      return await tryLoadModelFromCandidates(ort);
+      await loadModelMetadata(profile);
+      if (generation !== loadGeneration || profile.variant !== activeModelVariant) {
+        return false;
+      }
+      return await tryLoadModelFromCandidates(ort, profile, generation);
     } catch (error) {
       console.warn("[Model][ONNX] Runtime initialization failed:", error);
       return false;
@@ -475,14 +582,14 @@ export async function classifyWithMobileNetV3(
 
   try {
     const ort = await getOrtModule();
-    const metadata = await loadModelMetadata();
+    const metadata = await loadModelMetadata(getModelProfile(activeModelVariant));
     const preferredInputSize = resolveInputSize(metadata);
     const layout = deriveInputLayout(session, preferredInputSize);
 
     const targetWidth = layout.width || preferredInputSize || FALLBACK_IMAGE_SIZE;
     const targetHeight = layout.height || preferredInputSize || FALLBACK_IMAGE_SIZE;
 
-    const preprocessMode = resolvePreprocessMode(metadata, "mobilenet_v3");
+    const preprocessMode = resolvePreprocessMode(metadata, "identity");
     const image = await loadImage(imageFile);
     const imageData = buildCroppedImageData(image, targetWidth, targetHeight, options.guideBox);
     const tensorData = buildImageTensorData(imageData, layout.channelsFirst, preprocessMode);

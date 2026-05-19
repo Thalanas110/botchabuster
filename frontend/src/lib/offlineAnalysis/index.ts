@@ -8,11 +8,17 @@
  */
 
 import type { AnalysisResult, FreshnessClassification } from "@/types/inspection";
-import { classifyWithMobileNetV3, loadMobileNetV3, isModelReady, getLoadedModelPath } from "./mobileNetV3";
+import {
+  classifyWithMobileNetV3,
+  loadMobileNetV3,
+  isModelReady,
+  getLoadedModelPath,
+  getActiveModelPreprocessContract,
+} from "./mobileNetV3";
 import {
   classifyRecommendation,
   computeFreshnessScore,
-  createCroppedResizedImageFile,
+  createModelInputImageFile,
   DEFAULT_MEATLENS_INPUT_SIZE,
   type SquareGuideBox,
 } from "./meatLensPipeline";
@@ -291,15 +297,27 @@ export async function analyzeOffline(
   meatType: string,
   options: AnalyzeOfflineOptions = {}
 ): Promise<AnalysisResult> {
-  // Use the same deterministic path for camera and upload:
-  // - camera: guide-box square crop
-  // - upload: centered square fallback crop
-  // Both are then resized to 224x224 before feature extraction / inference.
-  const processedImageFile = await createCroppedResizedImageFile(imageFile, {
-    guideBox: options.guideBox ?? null,
+  const preprocessContract = getActiveModelPreprocessContract();
+  const requiresSegmentedCenterRoi = preprocessContract === "segmented_center_roi";
+
+  // Model2 contract:
+  // - center square crop
+  // - resize to 224x224
+  // - HSV/LAB-based ROI segmentation
+  // - gray background replacement
+  // If segmentation fails, fallback to center-cropped ROI image.
+  const preparedInput = await createModelInputImageFile(imageFile, {
+    guideBox: requiresSegmentedCenterRoi ? null : (options.guideBox ?? null),
+    forceCenterCrop: requiresSegmentedCenterRoi,
+    applySegmentation: requiresSegmentedCenterRoi,
     size: ANALYSIS_INPUT_SIZE,
     mimeType: "image/png",
   });
+  const processedImageFile = preparedInput.file;
+
+  if (requiresSegmentedCenterRoi && !preparedInput.segmentationApplied) {
+    console.info("[Model][ONNX] Segmentation fallback applied: using center-cropped 224x224 ROI.");
+  }
 
   // Try to use the ONNX model if it has already been loaded.
   let modelResult = null;

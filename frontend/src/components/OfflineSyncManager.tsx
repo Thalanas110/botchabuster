@@ -8,6 +8,7 @@ import { auditLogClient } from "@/integrations/api/AuditLogClient";
 import { getPendingScans, removeScan, type PendingScan } from "@/lib/offlineQueue";
 import { getPendingAuditLogs, removeAuditLog, type PendingAuditLog } from "@/lib/offlineAuditQueue";
 import { analyzeOffline, prewarmModel } from "@/lib/offlineAnalysis";
+import { setActiveMobileNetModelVariant } from "@/lib/offlineAnalysis/mobileNetV3";
 import { getDeveloperOptionsFlags } from "@/lib/developerOptions";
 
 const FORCE_RETAKE_CONFIDENCE_THRESHOLD = 80;
@@ -97,6 +98,7 @@ export function OfflineSyncManager() {
     if (isRunning.current) return;
 
     const developerFlags = getDeveloperOptionsFlags(user.id);
+    setActiveMobileNetModelVariant(developerFlags.useSeed123Model2 ? "seed123_model2" : "default");
 
     isRunning.current = true;
     try {
@@ -142,11 +144,13 @@ export function OfflineSyncManager() {
   useEffect(() => {
     const maybePrewarm = () => {
       if (!user) {
+        setActiveMobileNetModelVariant("default");
         prewarmModel();
         return;
       }
 
       const developerFlags = getDeveloperOptionsFlags(user.id);
+      setActiveMobileNetModelVariant(developerFlags.useSeed123Model2 ? "seed123_model2" : "default");
       if (developerFlags.skipModelPrewarm) {
         if (developerFlags.verboseOfflineSyncLogs) {
           console.info("[OfflineSyncManager] Skipping model prewarm due to developer option");

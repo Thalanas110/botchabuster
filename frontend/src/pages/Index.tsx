@@ -16,7 +16,11 @@ import { developerOptionsClient } from "@/integrations/api/DeveloperOptionsClien
 import { getConfidenceTextClass } from "@/lib/confidenceLevel";
 import { queueScan, removeScan } from "@/lib/offlineQueue";
 import { analyzeOffline } from "@/lib/offlineAnalysis";
-import { loadMobileNetV3, isModelReady as getMobileNetModelReady } from "@/lib/offlineAnalysis/mobileNetV3";
+import {
+  loadMobileNetV3,
+  isModelReady as getMobileNetModelReady,
+  setActiveMobileNetModelVariant,
+} from "@/lib/offlineAnalysis/mobileNetV3";
 import { DEFAULT_MARKET_LOCATIONS } from "@/lib/marketLocations";
 import {
   clearDeveloperOptionsSession,
@@ -89,6 +93,22 @@ const InspectPage = () => {
     developerFlags.enableDebugFileUpload,
   );
   const confidenceSummaryClass = result ? getConfidenceTextClass(result.confidence_score) : "";
+
+  useEffect(() => {
+    const nextVariant = user && isAdmin && developerFlags.useSeed123Model2
+      ? "seed123_model2"
+      : "default";
+    setActiveMobileNetModelVariant(nextVariant);
+    setIsModelReady(!navigator.onLine || getMobileNetModelReady());
+
+    if (!navigator.onLine) {
+      return;
+    }
+
+    void loadMobileNetV3({ forceRetry: true }).then((loaded) => {
+      setIsModelReady(loaded || getMobileNetModelReady());
+    });
+  }, [developerFlags.useSeed123Model2, isAdmin, user]);
 
   useEffect(() => {
     let isCancelled = false;

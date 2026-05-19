@@ -55,6 +55,11 @@ const FLAG_DEFINITIONS: FlagDefinition[] = [
     label: "Show model input preview",
     description: "Toggles the 224x224 model-preview thumbnail overlay in capture UI.",
   },
+  {
+    key: "useSeed123Model2",
+    label: "Switch model (seed123)",
+    description: "Uses MobileNetV3-small model2 (8-sample final ONNX, seed 123) for offline analysis.",
+  },
 ];
 
 function downloadJson(filename: string, payload: unknown): void {

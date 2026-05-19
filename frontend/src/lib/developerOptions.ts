@@ -10,6 +10,7 @@ export interface DeveloperOptionsFlags {
   verboseOfflineSyncLogs: boolean;
   skipModelPrewarm: boolean;
   showModelInputPreview: boolean;
+  useSeed123Model2: boolean;
 }
 
 export interface DeveloperOptionsSession {
@@ -31,6 +32,7 @@ export const DEFAULT_DEVELOPER_OPTIONS_FLAGS: DeveloperOptionsFlags = {
   verboseOfflineSyncLogs: false,
   skipModelPrewarm: false,
   showModelInputPreview: true,
+  useSeed123Model2: false,
 };
 
 function resolveFlagsStorageKey(userId: string): string {

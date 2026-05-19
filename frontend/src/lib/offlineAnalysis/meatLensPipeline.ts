@@ -21,6 +21,11 @@ export interface PreprocessImageOptions {
   fileName?: string;
 }
 
+export interface ModelInputPreparationOptions extends PreprocessImageOptions {
+  forceCenterCrop?: boolean;
+  applySegmentation?: boolean;
+}
+
 interface CenteredObjectCoverGuideBoxOptions {
   sourceWidth: number;
   sourceHeight: number;
@@ -52,6 +57,8 @@ const DEFAULT_LABEL_ORDER_4 = ["fresh", "acceptable", "warning", "spoiled"] as c
 const DEFAULT_LABEL_ORDER_3 = ["fresh", "not fresh", "spoiled"] as const;
 const DEFAULT_LABEL_ORDER_2 = ["fresh", "spoiled"] as const;
 const LOW_CONFIDENCE_WARNING_THRESHOLD_PERCENT = 90;
+const SEGMENTATION_BACKGROUND_GRAY = 127;
+const SEGMENTATION_MIN_COMPONENT_RATIO = 0.015;
 
 function isFinitePositive(value: unknown): value is number {
   return typeof value === "number" && Number.isFinite(value) && value > 0;
@@ -194,13 +201,19 @@ export async function createCroppedResizedImageFile(
   imageFile: File,
   options: PreprocessImageOptions = {}
 ): Promise<File> {
-  const targetSize = Math.max(1, Math.round(options.size ?? DEFAULT_MEATLENS_INPUT_SIZE));
-  const mimeType = options.mimeType ?? "image/jpeg";
-  const quality = clamp(options.quality ?? 0.92, 0, 1);
+  const prepared = await createModelInputImageFile(imageFile, {
+    ...options,
+    applySegmentation: false,
+  });
+  return prepared.file;
+}
 
-  const image = await loadImageElement(imageFile);
-  const crop = resolveSquareCropRegion(image.width, image.height, options.guideBox);
-
+function buildCroppedResizedImageData(
+  image: HTMLImageElement,
+  targetSize: number,
+  guideBox?: SquareGuideBox | null
+): ImageData {
+  const crop = resolveSquareCropRegion(image.width, image.height, guideBox);
   const canvas = document.createElement("canvas");
   canvas.width = targetSize;
   canvas.height = targetSize;
@@ -224,14 +237,345 @@ export async function createCroppedResizedImageFile(
     targetSize
   );
 
+  return context.getImageData(0, 0, targetSize, targetSize);
+}
+
+function toLinearRgb(channel: number): number {
+  const normalized = channel / 255;
+  if (normalized <= 0.04045) {
+    return normalized / 12.92;
+  }
+  return ((normalized + 0.055) / 1.055) ** 2.4;
+}
+
+function rgbToHsv(pixel: { r: number; g: number; b: number }): { h: number; s: number; v: number } {
+  const r = pixel.r / 255;
+  const g = pixel.g / 255;
+  const b = pixel.b / 255;
+  const max = Math.max(r, g, b);
+  const min = Math.min(r, g, b);
+  const delta = max - min;
+
+  let hue = 0;
+  if (delta > 0) {
+    if (max === r) {
+      hue = ((g - b) / delta) % 6;
+    } else if (max === g) {
+      hue = (b - r) / delta + 2;
+    } else {
+      hue = (r - g) / delta + 4;
+    }
+  }
+
+  const h = (hue * 60 + 360) % 360;
+  const s = max === 0 ? 0 : delta / max;
+  const v = max;
+  return { h, s, v };
+}
+
+function rgbToLab(pixel: { r: number; g: number; b: number }): { l: number; a: number; b: number } {
+  const r = toLinearRgb(pixel.r);
+  const g = toLinearRgb(pixel.g);
+  const b = toLinearRgb(pixel.b);
+
+  const x = r * 0.4124564 + g * 0.3575761 + b * 0.1804375;
+  const y = r * 0.2126729 + g * 0.7151522 + b * 0.072175;
+  const z = r * 0.0193339 + g * 0.119192 + b * 0.9503041;
+
+  const xRef = 0.95047;
+  const yRef = 1.0;
+  const zRef = 1.08883;
+
+  const fx = x / xRef > 0.008856 ? Math.cbrt(x / xRef) : 7.787 * (x / xRef) + 16 / 116;
+  const fy = y / yRef > 0.008856 ? Math.cbrt(y / yRef) : 7.787 * (y / yRef) + 16 / 116;
+  const fz = z / zRef > 0.008856 ? Math.cbrt(z / zRef) : 7.787 * (z / zRef) + 16 / 116;
+
+  const l = 116 * fy - 16;
+  const a = 500 * (fx - fy);
+  const labB = 200 * (fy - fz);
+  return { l, a, b: labB };
+}
+
+function isLikelyMeatForeground(pixel: { r: number; g: number; b: number }): boolean {
+  const hsv = rgbToHsv(pixel);
+  const lab = rgbToLab(pixel);
+
+  const hsvPass =
+    hsv.v >= 0.1 &&
+    hsv.s >= 0.08 &&
+    (hsv.h <= 40 || hsv.h >= 300 || (hsv.h >= 15 && hsv.h <= 75));
+
+  const labPass =
+    lab.l >= 12 &&
+    lab.l <= 95 &&
+    lab.a >= 2 &&
+    lab.a <= 55 &&
+    lab.b >= -8 &&
+    lab.b <= 70;
+
+  const strongLabPass = lab.a >= 10 && lab.b >= 0 && lab.l >= 10 && lab.l <= 95;
+  return (hsvPass && labPass) || strongLabPass;
+}
+
+function erodeMask(mask: Uint8Array, width: number, height: number): Uint8Array {
+  const output = new Uint8Array(mask.length);
+
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      let keep = 1;
+
+      for (let oy = -1; oy <= 1 && keep; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const neighborIndex = (y + oy) * width + (x + ox);
+          if (mask[neighborIndex] === 0) {
+            keep = 0;
+            break;
+          }
+        }
+      }
+
+      output[y * width + x] = keep;
+    }
+  }
+
+  return output;
+}
+
+function dilateMask(mask: Uint8Array, width: number, height: number): Uint8Array {
+  const output = new Uint8Array(mask.length);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      let hit = 0;
+
+      for (let oy = -1; oy <= 1 && !hit; oy++) {
+        for (let ox = -1; ox <= 1; ox++) {
+          const nx = x + ox;
+          const ny = y + oy;
+          if (nx < 0 || nx >= width || ny < 0 || ny >= height) {
+            continue;
+          }
+
+          const neighborIndex = ny * width + nx;
+          if (mask[neighborIndex] === 1) {
+            hit = 1;
+            break;
+          }
+        }
+      }
+
+      output[y * width + x] = hit;
+    }
+  }
+
+  return output;
+}
+
+function cleanMaskWithMorphology(mask: Uint8Array, width: number, height: number): Uint8Array {
+  const opened = dilateMask(erodeMask(mask, width, height), width, height);
+  return erodeMask(dilateMask(opened, width, height), width, height);
+}
+
+function selectBestCentralComponent(mask: Uint8Array, width: number, height: number): Uint8Array | null {
+  const totalPixels = width * height;
+  const visited = new Uint8Array(totalPixels);
+  const centerX = (width - 1) / 2;
+  const centerY = (height - 1) / 2;
+  const queue = new Int32Array(totalPixels);
+  const componentPixels = new Int32Array(totalPixels);
+
+  let bestScore = Number.NEGATIVE_INFINITY;
+  let bestSize = 0;
+  let bestPixels: Int32Array | null = null;
+
+  for (let start = 0; start < totalPixels; start++) {
+    if (mask[start] === 0 || visited[start] === 1) {
+      continue;
+    }
+
+    let head = 0;
+    let tail = 0;
+    let componentCount = 0;
+    let sumX = 0;
+    let sumY = 0;
+
+    queue[tail++] = start;
+    visited[start] = 1;
+
+    while (head < tail) {
+      const index = queue[head++];
+      componentPixels[componentCount++] = index;
+
+      const x = index % width;
+      const y = Math.floor(index / width);
+      sumX += x;
+      sumY += y;
+
+      if (x > 0) {
+        const left = index - 1;
+        if (mask[left] === 1 && visited[left] === 0) {
+          visited[left] = 1;
+          queue[tail++] = left;
+        }
+      }
+
+      if (x < width - 1) {
+        const right = index + 1;
+        if (mask[right] === 1 && visited[right] === 0) {
+          visited[right] = 1;
+          queue[tail++] = right;
+        }
+      }
+
+      if (y > 0) {
+        const top = index - width;
+        if (mask[top] === 1 && visited[top] === 0) {
+          visited[top] = 1;
+          queue[tail++] = top;
+        }
+      }
+
+      if (y < height - 1) {
+        const bottom = index + width;
+        if (mask[bottom] === 1 && visited[bottom] === 0) {
+          visited[bottom] = 1;
+          queue[tail++] = bottom;
+        }
+      }
+    }
+
+    if (componentCount === 0) {
+      continue;
+    }
+
+    const centroidX = sumX / componentCount;
+    const centroidY = sumY / componentCount;
+    const dx = centroidX - centerX;
+    const dy = centroidY - centerY;
+    const distancePenalty = (dx * dx + dy * dy) / (width * width + height * height);
+    const areaRatio = componentCount / totalPixels;
+    const score = areaRatio * 2 - distancePenalty;
+
+    if (score > bestScore) {
+      bestScore = score;
+      bestSize = componentCount;
+      bestPixels = componentPixels.slice(0, componentCount);
+    }
+  }
+
+  if (!bestPixels || bestSize < totalPixels * SEGMENTATION_MIN_COMPONENT_RATIO) {
+    return null;
+  }
+
+  const bestMask = new Uint8Array(totalPixels);
+  for (let index = 0; index < bestPixels.length; index++) {
+    bestMask[bestPixels[index]] = 1;
+  }
+
+  return bestMask;
+}
+
+export function applyRoiSegmentationWithFallback(
+  imageData: ImageData
+): { imageData: ImageData; segmented: boolean } {
+  try {
+    const width = imageData.width;
+    const height = imageData.height;
+    const totalPixels = width * height;
+    const source = imageData.data;
+    const rawMask = new Uint8Array(totalPixels);
+
+    for (let index = 0; index < totalPixels; index++) {
+      const pixelOffset = index * 4;
+      const pixel = {
+        r: source[pixelOffset],
+        g: source[pixelOffset + 1],
+        b: source[pixelOffset + 2],
+      };
+      rawMask[index] = isLikelyMeatForeground(pixel) ? 1 : 0;
+    }
+
+    const cleanedMask = cleanMaskWithMorphology(rawMask, width, height);
+    const bestMask = selectBestCentralComponent(cleanedMask, width, height);
+
+    if (!bestMask) {
+      return { imageData, segmented: false };
+    }
+
+    const segmentedPixels = new Uint8ClampedArray(source.length);
+    for (let index = 0; index < totalPixels; index++) {
+      const pixelOffset = index * 4;
+      const keepForeground = bestMask[index] === 1;
+
+      if (keepForeground) {
+        segmentedPixels[pixelOffset] = source[pixelOffset];
+        segmentedPixels[pixelOffset + 1] = source[pixelOffset + 1];
+        segmentedPixels[pixelOffset + 2] = source[pixelOffset + 2];
+      } else {
+        segmentedPixels[pixelOffset] = SEGMENTATION_BACKGROUND_GRAY;
+        segmentedPixels[pixelOffset + 1] = SEGMENTATION_BACKGROUND_GRAY;
+        segmentedPixels[pixelOffset + 2] = SEGMENTATION_BACKGROUND_GRAY;
+      }
+
+      segmentedPixels[pixelOffset + 3] = 255;
+    }
+
+    return {
+      imageData: new ImageData(segmentedPixels, width, height),
+      segmented: true,
+    };
+  } catch {
+    return { imageData, segmented: false };
+  }
+}
+
+async function imageDataToFile(
+  imageData: ImageData,
+  fileName: string,
+  mimeType: string,
+  quality: number
+): Promise<File> {
+  const canvas = document.createElement("canvas");
+  canvas.width = imageData.width;
+  canvas.height = imageData.height;
+
+  const context = canvas.getContext("2d");
+  if (!context) {
+    throw new Error("Unable to create 2D canvas context.");
+  }
+
+  context.putImageData(imageData, 0, 0);
   const blob = await canvasToBlob(canvas, mimeType, quality);
-  const fileName =
-    options.fileName ??
-    `${imageFile.name.replace(/\.[^.]+$/, "")}${resolveOutputExtension(mimeType)}`;
   return new File([blob], fileName, {
     type: mimeType,
     lastModified: Date.now(),
   });
+}
+
+export async function createModelInputImageFile(
+  imageFile: File,
+  options: ModelInputPreparationOptions = {}
+): Promise<{ file: File; segmentationApplied: boolean }> {
+  const targetSize = Math.max(1, Math.round(options.size ?? DEFAULT_MEATLENS_INPUT_SIZE));
+  const mimeType = options.mimeType ?? "image/jpeg";
+  const quality = clamp(options.quality ?? 0.92, 0, 1);
+  const cropGuideBox = options.forceCenterCrop ? null : (options.guideBox ?? null);
+
+  const image = await loadImageElement(imageFile);
+  const croppedImageData = buildCroppedResizedImageData(image, targetSize, cropGuideBox);
+  const segmentedResult = options.applySegmentation
+    ? applyRoiSegmentationWithFallback(croppedImageData)
+    : { imageData: croppedImageData, segmented: false };
+
+  const outputFileName =
+    options.fileName ??
+    `${imageFile.name.replace(/\.[^.]+$/, "")}${resolveOutputExtension(mimeType)}`;
+  const outputFile = await imageDataToFile(segmentedResult.imageData, outputFileName, mimeType, quality);
+
+  return {
+    file: outputFile,
+    segmentationApplied: segmentedResult.segmented,
+  };
 }
 
 export function resolveInputSize(metadata?: MeatLensModelMetadata | null): number {

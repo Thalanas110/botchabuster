@@ -5,11 +5,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import { assessCanvasQuality, assessFileQuality } from "@/lib/captureQuality";
 import {
-  createCroppedResizedImageFile,
+  createModelInputImageFile,
   DEFAULT_MEATLENS_INPUT_SIZE,
   resolveCenteredObjectCoverGuideBox,
   type SquareGuideBox,
 } from "@/lib/offlineAnalysis/meatLensPipeline";
+import { getActiveModelPreprocessContract } from "@/lib/offlineAnalysis/mobileNetV3";
 
 export interface CapturedImagePayload {
   file: File;
@@ -67,13 +68,17 @@ const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
     setIsPreparingModelPreview(true);
 
     try {
-      const preprocessedFile = await createCroppedResizedImageFile(sourceFile, {
-        guideBox,
+      const preprocessContract = getActiveModelPreprocessContract();
+      const requiresSegmentedCenterRoi = preprocessContract === "segmented_center_roi";
+      const preparedInput = await createModelInputImageFile(sourceFile, {
+        guideBox: requiresSegmentedCenterRoi ? null : guideBox,
+        forceCenterCrop: requiresSegmentedCenterRoi,
+        applySegmentation: requiresSegmentedCenterRoi,
         size: DEFAULT_MEATLENS_INPUT_SIZE,
         mimeType: "image/jpeg",
         quality: PREVIEW_EXPORT_QUALITY,
       });
-      const previewDataUrl = await readBlobAsDataUrl(preprocessedFile);
+      const previewDataUrl = await readBlobAsDataUrl(preparedInput.file);
 
       if (previewRequestIdRef.current === requestId) {
         setModelInputPreview(previewDataUrl);
@@ -393,8 +398,10 @@ const startCamera = useCallback(async () => {
                   aspectRatio: "1 / 1",
                 }}
               />
-              <p className="absolute bottom-4 rounded-full border border-primary/40 bg-background/80 px-3 py-1 text-[10px] uppercase tracking-wide text-primary">
-                {qualitySource === "file" && !captureGuideBox
+                <p className="absolute bottom-4 rounded-full border border-primary/40 bg-background/80 px-3 py-1 text-[10px] uppercase tracking-wide text-primary">
+                {getActiveModelPreprocessContract() === "segmented_center_roi"
+                  ? "Segmented center ROI -> 224x224 model input"
+                  : qualitySource === "file" && !captureGuideBox
                   ? "Center crop -> 224x224 model input"
                   : "Guide crop -> 224x224 model input"}
               </p>

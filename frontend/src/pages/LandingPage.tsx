@@ -29,7 +29,7 @@ const features = [
   },
   {
     icon: ShieldCheck,
-    title: "NMIS Standard Alignment",
+    title: "Food Safety Standard Alignment",
     desc: "Classify every sample against health-guided freshness indicators with a consistent decision framework.",
     tint: "bg-[hsl(var(--primary)/0.16)]",
   },

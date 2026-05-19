@@ -11,7 +11,7 @@ const CHAT_URL = `${API_BASE_URL}/chat`;
 export function AIChatbot() {
   const [open, setOpen] = useState(false);
   const [messages, setMessages] = useState<Msg[]>([
-    { role: "assistant", content: "Hi! I'm MeatLens AI. Ask me about meat freshness, NMIS standards, or how to use the app." },
+    { role: "assistant", content: "Hi! I'm MeatLens AI. Ask me about meat freshness, food safety, or how to use the app." },
   ]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);

@@ -27,7 +27,7 @@ export function TermsAndConditionsContent({ className }: TermsAndConditionsConte
         <ul className="list-disc space-y-1 pl-5">
           <li>Final decisions must be based on professional judgment.</li>
           <li>The system does not replace official inspection protocols.</li>
-          <li>Users must follow existing guidelines from relevant authorities (for example NMIS and LGU regulations).</li>
+          <li>Users must follow existing guidelines from relevant authorities (for example LGU regulations and institutional policies).</li>
         </ul>
       </section>
 

@@ -338,7 +338,7 @@ const ProfilePage = () => {
               <h3 className="mb-3 font-display text-lg font-semibold">Terms and Conditions Reminder</h3>
               <p className="mt-1 text-xs text-muted-foreground">
                 MeatLens is an AI-assisted support tool. Final inspection decisions must still follow professional
-                standards and official NMIS or LGU protocols.
+                standards and official LGU or institutional protocols.
               </p>
               <Button
                 type="button"

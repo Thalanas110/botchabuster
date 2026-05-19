@@ -32,7 +32,7 @@ export const DEFAULT_DEVELOPER_OPTIONS_FLAGS: DeveloperOptionsFlags = {
   verboseOfflineSyncLogs: false,
   skipModelPrewarm: false,
   showModelInputPreview: true,
-  useSeed123Model2: false,
+  useSeed123Model2: true,
 };
 
 function resolveFlagsStorageKey(userId: string): string {

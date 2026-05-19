@@ -95,9 +95,9 @@ const InspectPage = () => {
   const confidenceSummaryClass = result ? getConfidenceTextClass(result.confidence_score) : "";
 
   useEffect(() => {
-    const nextVariant = user && isAdmin && developerFlags.useSeed123Model2
-      ? "seed123_model2"
-      : "default";
+    const useLegacyOverride =
+      Boolean(user && isAdmin && isDeveloperUnlocked) && !developerFlags.useSeed123Model2;
+    const nextVariant = useLegacyOverride ? "default" : "seed123_model2";
     setActiveMobileNetModelVariant(nextVariant);
     setIsModelReady(!navigator.onLine || getMobileNetModelReady());
 
@@ -108,7 +108,7 @@ const InspectPage = () => {
     void loadMobileNetV3({ forceRetry: true }).then((loaded) => {
       setIsModelReady(loaded || getMobileNetModelReady());
     });
-  }, [developerFlags.useSeed123Model2, isAdmin, user]);
+  }, [developerFlags.useSeed123Model2, isAdmin, isDeveloperUnlocked, user]);
 
   useEffect(() => {
     let isCancelled = false;

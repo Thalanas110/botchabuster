@@ -57,8 +57,8 @@ const FLAG_DEFINITIONS: FlagDefinition[] = [
   },
   {
     key: "useSeed123Model2",
-    label: "Switch model (seed123)",
-    description: "Uses MobileNetV3-small model2 (8-sample final ONNX, seed 123) for offline analysis.",
+    label: "Use seed123 primary model",
+    description: "When off, fallback to legacy MobileNetV3-small seed42 model for developer comparison.",
   },
 ];
 

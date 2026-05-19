@@ -9,7 +9,11 @@ import { getPendingScans, removeScan, type PendingScan } from "@/lib/offlineQueu
 import { getPendingAuditLogs, removeAuditLog, type PendingAuditLog } from "@/lib/offlineAuditQueue";
 import { analyzeOffline, prewarmModel } from "@/lib/offlineAnalysis";
 import { setActiveMobileNetModelVariant } from "@/lib/offlineAnalysis/mobileNetV3";
-import { getDeveloperOptionsFlags } from "@/lib/developerOptions";
+import {
+  getDeveloperOptionsFlags,
+  getDeveloperOptionsSession,
+  isDeveloperOptionsSessionExpired,
+} from "@/lib/developerOptions";
 
 const FORCE_RETAKE_CONFIDENCE_THRESHOLD = 80;
 
@@ -88,9 +92,31 @@ async function processAuditLogs(logs: PendingAuditLog[]): Promise<void> {
  *   offline session.
  */
 export function OfflineSyncManager() {
-  const { user } = useAuth();
+  const { user, isAdmin } = useAuth();
   const queryClient = useQueryClient();
   const isRunning = useRef(false);
+
+  const resolveActiveVariant = () => {
+    if (!user) {
+      return "seed123_model2" as const;
+    }
+
+    if (!isAdmin) {
+      return "seed123_model2" as const;
+    }
+
+    const developerFlags = getDeveloperOptionsFlags(user.id);
+    const developerSession = getDeveloperOptionsSession(user.id);
+    const isDeveloperUnlocked = Boolean(
+      developerSession && !isDeveloperOptionsSessionExpired(developerSession)
+    );
+
+    if (isDeveloperUnlocked && !developerFlags.useSeed123Model2) {
+      return "default" as const;
+    }
+
+    return "seed123_model2" as const;
+  };
 
   const drainQueue = async () => {
     if (!navigator.onLine) return;
@@ -98,7 +124,7 @@ export function OfflineSyncManager() {
     if (isRunning.current) return;
 
     const developerFlags = getDeveloperOptionsFlags(user.id);
-    setActiveMobileNetModelVariant(developerFlags.useSeed123Model2 ? "seed123_model2" : "default");
+    setActiveMobileNetModelVariant(resolveActiveVariant());
 
     isRunning.current = true;
     try {
@@ -144,13 +170,13 @@ export function OfflineSyncManager() {
   useEffect(() => {
     const maybePrewarm = () => {
       if (!user) {
-        setActiveMobileNetModelVariant("default");
+        setActiveMobileNetModelVariant("seed123_model2");
         prewarmModel();
         return;
       }
 
       const developerFlags = getDeveloperOptionsFlags(user.id);
-      setActiveMobileNetModelVariant(developerFlags.useSeed123Model2 ? "seed123_model2" : "default");
+      setActiveMobileNetModelVariant(resolveActiveVariant());
       if (developerFlags.skipModelPrewarm) {
         if (developerFlags.verboseOfflineSyncLogs) {
           console.info("[OfflineSyncManager] Skipping model prewarm due to developer option");
@@ -172,7 +198,7 @@ export function OfflineSyncManager() {
     window.addEventListener("online", handleOnline);
     return () => window.removeEventListener("online", handleOnline);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user?.id]);
+  }, [isAdmin, user?.id]);
 
   return null;
 }

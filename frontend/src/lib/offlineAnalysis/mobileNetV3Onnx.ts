@@ -183,7 +183,7 @@ let metadataPromise: Promise<MeatLensModelMetadata> | null = null;
 let metadataPromiseVariant: MobileNetModelVariant | null = null;
 let nextRetryAt = 0;
 let loadGeneration = 0;
-let activeModelVariant: MobileNetModelVariant = "default";
+let activeModelVariant: MobileNetModelVariant = "seed123_model2";
 
 function getModelProfile(variant: MobileNetModelVariant): ModelAssetProfile {
   return MODEL_ASSET_PROFILES[variant];

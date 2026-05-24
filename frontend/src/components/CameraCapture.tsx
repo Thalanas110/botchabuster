@@ -22,6 +22,120 @@ export interface CapturedImagePayload {
 const GUIDE_BOX_SIZE_RATIO = 0.72;
 const PREVIEW_EXPORT_QUALITY = 0.92;
 
+type CameraControlKey = "focusDistance" | "brightness" | "exposureCompensation" | "zoom" | "aperture";
+
+interface CameraControlRange {
+  min: number;
+  max: number;
+  step: number;
+}
+
+interface ExtendedMediaTrackCapabilities extends MediaTrackCapabilities {
+  torch?: boolean;
+  focusMode?: string[];
+  focusDistance?: MediaSettingsRange;
+  brightness?: MediaSettingsRange;
+  exposureCompensation?: MediaSettingsRange;
+  zoom?: MediaSettingsRange;
+  aperture?: MediaSettingsRange;
+}
+
+interface ExtendedMediaTrackSettings extends MediaTrackSettings {
+  torch?: boolean;
+  focusMode?: string;
+  focusDistance?: number;
+  brightness?: number;
+  exposureCompensation?: number;
+  zoom?: number;
+  aperture?: number;
+}
+
+interface AdvancedCameraConstraints extends MediaTrackConstraintSet {
+  torch?: boolean;
+  focusMode?: string;
+  focusDistance?: number;
+  brightness?: number;
+  exposureCompensation?: number;
+  zoom?: number;
+  aperture?: number;
+}
+
+interface CameraControlsState {
+  focusModeOptions: string[];
+  focusMode: string | null;
+  focusDistanceRange: CameraControlRange | null;
+  focusDistance: number | null;
+  brightnessRange: CameraControlRange | null;
+  brightness: number | null;
+  exposureCompensationRange: CameraControlRange | null;
+  exposureCompensation: number | null;
+  apertureRange: CameraControlRange | null;
+  aperture: number | null;
+  zoomRange: CameraControlRange | null;
+  zoom: number | null;
+}
+
+const EMPTY_CAMERA_CONTROLS: CameraControlsState = {
+  focusModeOptions: [],
+  focusMode: null,
+  focusDistanceRange: null,
+  focusDistance: null,
+  brightnessRange: null,
+  brightness: null,
+  exposureCompensationRange: null,
+  exposureCompensation: null,
+  apertureRange: null,
+  aperture: null,
+  zoomRange: null,
+  zoom: null,
+};
+
+function parseCameraControlRange(value: unknown): CameraControlRange | null {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const maybeRange = value as { min?: unknown; max?: unknown; step?: unknown };
+  if (typeof maybeRange.min !== "number" || typeof maybeRange.max !== "number") {
+    return null;
+  }
+
+  if (!Number.isFinite(maybeRange.min) || !Number.isFinite(maybeRange.max) || maybeRange.max <= maybeRange.min) {
+    return null;
+  }
+
+  const step =
+    typeof maybeRange.step === "number" && Number.isFinite(maybeRange.step) && maybeRange.step > 0
+      ? maybeRange.step
+      : 0.1;
+
+  return { min: maybeRange.min, max: maybeRange.max, step };
+}
+
+function clampToRange(value: number, range: CameraControlRange): number {
+  return Math.min(range.max, Math.max(range.min, value));
+}
+
+function normalizeSettingNumber(value: unknown, range: CameraControlRange | null): number | null {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return range ? range.min : null;
+  }
+
+  if (!range) {
+    return value;
+  }
+
+  return clampToRange(value, range);
+}
+
+function formatControlValue(value: number | null): string {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return "--";
+  }
+
+  return Number.isInteger(value) ? `${value}` : value.toFixed(1);
+}
+
 function readBlobAsDataUrl(blob: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -50,18 +164,21 @@ export function CameraCapture({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const capturedImageRef = useRef<HTMLImageElement>(null);
   const previewRequestIdRef = useRef(0);
+  const videoTrackRef = useRef<MediaStreamTrack | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [capturedImage, setCapturedImage] = useState<string | null>(null);
   const [isStreaming, setIsStreaming] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
+  const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [captureGuideBox, setCaptureGuideBox] = useState<SquareGuideBox | null>(null);
   const [modelInputPreview, setModelInputPreview] = useState<string | null>(null);
   const [isPreparingModelPreview, setIsPreparingModelPreview] = useState(false);
+  const [torchSupported, setTorchSupported] = useState(false);
   const [flashEnabled, setFlashEnabled] = useState(false);
+  const [cameraControls, setCameraControls] = useState<CameraControlsState>(EMPTY_CAMERA_CONTROLS);
 
   const updateModelInputPreview = useCallback(async (sourceFile: File, guideBox: SquareGuideBox | null) => {
     const requestId = ++previewRequestIdRef.current;
@@ -95,9 +212,147 @@ const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
     }
   }, []);
 
-const startCamera = useCallback(async () => {
+  const resetCameraControls = useCallback(() => {
+    videoTrackRef.current = null;
+    setTorchSupported(false);
+    setFlashEnabled(false);
+    setCameraControls(EMPTY_CAMERA_CONTROLS);
+  }, []);
+
+  const initializeCameraControls = useCallback((track: MediaStreamTrack) => {
+    const capabilities =
+      typeof track.getCapabilities === "function"
+        ? ((track.getCapabilities() as ExtendedMediaTrackCapabilities) ?? {})
+        : ({} as ExtendedMediaTrackCapabilities);
+    const settings =
+      typeof track.getSettings === "function"
+        ? ((track.getSettings() as ExtendedMediaTrackSettings) ?? {})
+        : ({} as ExtendedMediaTrackSettings);
+
+    const focusModeOptions = Array.isArray(capabilities.focusMode)
+      ? capabilities.focusMode.filter((mode): mode is string => typeof mode === "string" && mode.trim().length > 0)
+      : [];
+    const focusDistanceRange = parseCameraControlRange(capabilities.focusDistance);
+    const brightnessRange = parseCameraControlRange(capabilities.brightness);
+    const exposureCompensationRange = parseCameraControlRange(capabilities.exposureCompensation);
+    const apertureRange = parseCameraControlRange(capabilities.aperture);
+    const zoomRange = parseCameraControlRange(capabilities.zoom);
+
+    const initialFocusMode =
+      typeof settings.focusMode === "string"
+        ? settings.focusMode
+        : focusModeOptions.length > 0
+        ? focusModeOptions[0]
+        : null;
+
+    setTorchSupported(Boolean(capabilities.torch));
+    setFlashEnabled(Boolean(settings.torch));
+    setCameraControls({
+      focusModeOptions,
+      focusMode: initialFocusMode,
+      focusDistanceRange,
+      focusDistance: normalizeSettingNumber(settings.focusDistance, focusDistanceRange),
+      brightnessRange,
+      brightness: normalizeSettingNumber(settings.brightness, brightnessRange),
+      exposureCompensationRange,
+      exposureCompensation: normalizeSettingNumber(settings.exposureCompensation, exposureCompensationRange),
+      apertureRange,
+      aperture: normalizeSettingNumber(settings.aperture, apertureRange),
+      zoomRange,
+      zoom: normalizeSettingNumber(settings.zoom, zoomRange),
+    });
+  }, []);
+
+  const applyAdvancedTrackConstraints = useCallback(async (constraints: AdvancedCameraConstraints): Promise<boolean> => {
+    const track = videoTrackRef.current;
+    if (!track) {
+      return false;
+    }
+
+    try {
+      await track.applyConstraints({
+        advanced: [constraints as MediaTrackConstraintSet],
+      });
+      return true;
+    } catch (applyError) {
+      console.warn("[Camera] Failed to apply track constraints", applyError);
+      return false;
+    }
+  }, []);
+
+  const handleFocusModeChange = useCallback(
+    async (nextMode: string) => {
+      setCameraControls((prev) => ({ ...prev, focusMode: nextMode }));
+
+      const applied = await applyAdvancedTrackConstraints({ focusMode: nextMode });
+      if (!applied) {
+        return;
+      }
+
+      if (nextMode === "manual" && cameraControls.focusDistanceRange && typeof cameraControls.focusDistance === "number") {
+        const nextFocusDistance = clampToRange(cameraControls.focusDistance, cameraControls.focusDistanceRange);
+        setCameraControls((prev) => ({ ...prev, focusDistance: nextFocusDistance }));
+        await applyAdvancedTrackConstraints({ focusDistance: nextFocusDistance });
+      }
+    },
+    [applyAdvancedTrackConstraints, cameraControls.focusDistance, cameraControls.focusDistanceRange]
+  );
+
+  const handleRangeControlChange = useCallback(
+    async (controlKey: CameraControlKey, value: string) => {
+      const nextValue = Number(value);
+      if (!Number.isFinite(nextValue)) {
+        return;
+      }
+
+      let range: CameraControlRange | null = null;
+      if (controlKey === "focusDistance") range = cameraControls.focusDistanceRange;
+      if (controlKey === "brightness") range = cameraControls.brightnessRange;
+      if (controlKey === "exposureCompensation") range = cameraControls.exposureCompensationRange;
+      if (controlKey === "aperture") range = cameraControls.apertureRange;
+      if (controlKey === "zoom") range = cameraControls.zoomRange;
+
+      const boundedValue = range ? clampToRange(nextValue, range) : nextValue;
+      setCameraControls((prev) => ({ ...prev, [controlKey]: boundedValue }));
+
+      if (
+        controlKey === "focusDistance" &&
+        cameraControls.focusModeOptions.includes("manual") &&
+        cameraControls.focusMode !== "manual"
+      ) {
+        return;
+      }
+
+      await applyAdvancedTrackConstraints({ [controlKey]: boundedValue });
+    },
+    [
+      applyAdvancedTrackConstraints,
+      cameraControls.apertureRange,
+      cameraControls.brightnessRange,
+      cameraControls.exposureCompensationRange,
+      cameraControls.focusDistanceRange,
+      cameraControls.focusMode,
+      cameraControls.focusModeOptions,
+      cameraControls.zoomRange,
+    ]
+  );
+
+  const handleTorchToggle = useCallback(async () => {
+    if (!torchSupported) {
+      return;
+    }
+
+    const nextState = !flashEnabled;
+    const applied = await applyAdvancedTrackConstraints({ torch: nextState });
+    if (applied) {
+      setFlashEnabled(nextState);
+    }
+  }, [applyAdvancedTrackConstraints, flashEnabled, torchSupported]);
+
+  const startCamera = useCallback(async () => {
     if (disabled) return;
 
+    resetCameraControls();
     setError(null);
     setIsStarting(true);
     setIsStreaming(true);
@@ -128,18 +383,8 @@ const startCamera = useCallback(async () => {
 
       const videoTrack = mediaStream?.getVideoTracks()[0];
       if (videoTrack) {
-        const capabilities = videoTrack.getCapabilities() as MediaTrackCapabilities & { torch?: boolean };
-        if (capabilities.torch) {
-          try {
-            await videoTrack.applyConstraints({ advanced: [{ torch: true } as MediaTrackConstraintSet] });
-            setFlashEnabled(true);
-          } catch {
-            console.warn("[Camera] Flash not supported on this device");
-            setFlashEnabled(false);
-          }
-        } else {
-          setFlashEnabled(false);
-        }
+        videoTrackRef.current = videoTrack;
+        initializeCameraControls(videoTrack);
       }
 
       if (videoRef.current) {
@@ -152,16 +397,18 @@ const startCamera = useCallback(async () => {
         if (mediaStream) {
           mediaStream.getTracks().forEach((track) => track.stop());
         }
+        resetCameraControls();
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : "Unknown error";
       setError(errorMessage);
       toast.error(`Camera error: ${errorMessage}`);
       setIsStreaming(false);
+      resetCameraControls();
     } finally {
       setIsStarting(false);
     }
-  }, [disabled]);
+  }, [disabled, initializeCameraControls, resetCameraControls]);
 
   useEffect(() => {
     const video = videoRef.current;
@@ -188,6 +435,12 @@ const startCamera = useCallback(async () => {
       stream?.getTracks().forEach((track) => track.stop());
     };
   }, [stream]);
+
+  useEffect(() => {
+    return () => {
+      videoTrackRef.current = null;
+    };
+  }, []);
 
   const capturePhoto = useCallback(() => {
     if (disabled) return;
@@ -244,7 +497,8 @@ const startCamera = useCallback(async () => {
     setStream(null);
     setIsStreaming(false);
     setIsVideoReady(false);
-  }, [disabled, stream, updateModelInputPreview]);
+    resetCameraControls();
+  }, [disabled, resetCameraControls, stream, updateModelInputPreview]);
 
   const handleCapturedImageLoad = useCallback(() => {
     if (qualitySource !== "file" || !uploadedFile || !capturedImageRef.current) {
@@ -344,7 +598,8 @@ const startCamera = useCallback(async () => {
     setIsPreparingModelPreview(false);
     previewRequestIdRef.current += 1;
     setQualitySource("canvas");
-  }, [disabled, stream]);
+    resetCameraControls();
+  }, [disabled, resetCameraControls, stream]);
 
   const handleFileInput = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -377,6 +632,19 @@ const startCamera = useCallback(async () => {
     },
     [allowFileUpload, disabled, onCapture, updateModelInputPreview]
   );
+
+  const supportsManualFocusMode = cameraControls.focusModeOptions.includes("manual");
+  const showManualFocusSlider = Boolean(cameraControls.focusDistanceRange);
+  const hasManualControlSupport =
+    torchSupported ||
+    cameraControls.focusModeOptions.length > 0 ||
+    Boolean(
+      cameraControls.focusDistanceRange ||
+      cameraControls.brightnessRange ||
+      cameraControls.exposureCompensationRange ||
+      cameraControls.apertureRange ||
+      cameraControls.zoomRange
+    );
 
   return (
     <div className={cn("flex flex-col items-center gap-4", className)}>
@@ -442,7 +710,7 @@ const startCamera = useCallback(async () => {
               </div>
             )}
 
-{isVideoReady && (
+            {isVideoReady && (
               <>
                 <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
                   <div
@@ -457,29 +725,6 @@ const startCamera = useCallback(async () => {
                   </p>
                 </div>
                 <div className="absolute inset-x-0 h-0.5 bg-primary/60 animate-scan-line" />
-                <button
-                  type="button"
-                  onClick={async () => {
-                    const videoTrack = stream?.getVideoTracks()[0];
-                    if (videoTrack) {
-                      const newState = !flashEnabled;
-                      try {
-                        await videoTrack.applyConstraints({ advanced: [{ torch: newState } as MediaTrackConstraintSet] });
-                        setFlashEnabled(newState);
-                      } catch {
-                        console.warn("[Camera] Flash toggle failed");
-                      }
-                    }
-                  }}
-                  className="absolute left-3 top-3 flex items-center gap-1.5 rounded-full border border-primary/30 bg-background/80 px-2 py-1 shadow-sm transition-colors hover:bg-background/90"
-                >
-                  <span
-                    className={`h-2 w-2 rounded-full ${flashEnabled ? "bg-green-500 animate-pulse" : "bg-gray-400"}`}
-                  />
-                  <p className="text-[9px] font-medium uppercase tracking-wide">
-                    {flashEnabled ? "Flash On" : "Flash Off"}
-                  </p>
-                </button>
               </>
             )}
           </>
@@ -492,6 +737,137 @@ const startCamera = useCallback(async () => {
         )}
         <canvas ref={canvasRef} className="hidden" />
       </div>
+
+      {isStreaming && isVideoReady && (
+        <div className="w-full rounded-2xl border border-border/70 bg-background/65 p-3 shadow-sm">
+          <div className="mb-2 flex items-center justify-between gap-2">
+            <p className="text-[11px] font-display uppercase tracking-widest text-muted-foreground">Camera Controls</p>
+            {torchSupported && (
+              <Button
+                type="button"
+                size="sm"
+                variant={flashEnabled ? "default" : "outline"}
+                className="h-7 rounded-full px-3 text-[10px] uppercase tracking-wide"
+                onClick={() => void handleTorchToggle()}
+              >
+                {flashEnabled ? "Flash On" : "Flash Off"}
+              </Button>
+            )}
+          </div>
+
+          {hasManualControlSupport ? (
+            <>
+              <div className="grid gap-3 sm:grid-cols-2">
+                {cameraControls.focusModeOptions.length > 0 && (
+                  <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Focus Mode
+                    <select
+                      aria-label="Focus mode"
+                      value={cameraControls.focusMode ?? ""}
+                      onChange={(event) => void handleFocusModeChange(event.target.value)}
+                      className="h-9 rounded-md border border-border/70 bg-background px-2 text-xs text-foreground"
+                    >
+                      {cameraControls.focusModeOptions.map((mode) => (
+                        <option key={mode} value={mode}>
+                          {mode}
+                        </option>
+                      ))}
+                    </select>
+                  </label>
+                )}
+
+                {showManualFocusSlider && cameraControls.focusDistanceRange && (
+                  <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Manual Focus
+                    <input
+                      aria-label="Manual focus"
+                      type="range"
+                      min={cameraControls.focusDistanceRange.min}
+                      max={cameraControls.focusDistanceRange.max}
+                      step={cameraControls.focusDistanceRange.step}
+                      value={cameraControls.focusDistance ?? cameraControls.focusDistanceRange.min}
+                      disabled={supportsManualFocusMode && cameraControls.focusMode !== "manual"}
+                      onChange={(event) => void handleRangeControlChange("focusDistance", event.target.value)}
+                    />
+                    <span className="text-[10px] text-foreground">{formatControlValue(cameraControls.focusDistance)}</span>
+                  </label>
+                )}
+
+                {cameraControls.brightnessRange && (
+                  <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Brightness
+                    <input
+                      aria-label="Brightness"
+                      type="range"
+                      min={cameraControls.brightnessRange.min}
+                      max={cameraControls.brightnessRange.max}
+                      step={cameraControls.brightnessRange.step}
+                      value={cameraControls.brightness ?? cameraControls.brightnessRange.min}
+                      onChange={(event) => void handleRangeControlChange("brightness", event.target.value)}
+                    />
+                    <span className="text-[10px] text-foreground">{formatControlValue(cameraControls.brightness)}</span>
+                  </label>
+                )}
+
+                {cameraControls.exposureCompensationRange && (
+                  <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Exposure
+                    <input
+                      aria-label="Exposure"
+                      type="range"
+                      min={cameraControls.exposureCompensationRange.min}
+                      max={cameraControls.exposureCompensationRange.max}
+                      step={cameraControls.exposureCompensationRange.step}
+                      value={cameraControls.exposureCompensation ?? cameraControls.exposureCompensationRange.min}
+                      onChange={(event) => void handleRangeControlChange("exposureCompensation", event.target.value)}
+                    />
+                    <span className="text-[10px] text-foreground">
+                      {formatControlValue(cameraControls.exposureCompensation)}
+                    </span>
+                  </label>
+                )}
+
+                {cameraControls.apertureRange && (
+                  <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Aperture
+                    <input
+                      aria-label="Aperture"
+                      type="range"
+                      min={cameraControls.apertureRange.min}
+                      max={cameraControls.apertureRange.max}
+                      step={cameraControls.apertureRange.step}
+                      value={cameraControls.aperture ?? cameraControls.apertureRange.min}
+                      onChange={(event) => void handleRangeControlChange("aperture", event.target.value)}
+                    />
+                    <span className="text-[10px] text-foreground">{formatControlValue(cameraControls.aperture)}</span>
+                  </label>
+                )}
+
+                {cameraControls.zoomRange && (
+                  <label className="flex flex-col gap-1 text-[10px] uppercase tracking-wide text-muted-foreground">
+                    Zoom
+                    <input
+                      aria-label="Zoom"
+                      type="range"
+                      min={cameraControls.zoomRange.min}
+                      max={cameraControls.zoomRange.max}
+                      step={cameraControls.zoomRange.step}
+                      value={cameraControls.zoom ?? cameraControls.zoomRange.min}
+                      onChange={(event) => void handleRangeControlChange("zoom", event.target.value)}
+                    />
+                    <span className="text-[10px] text-foreground">{formatControlValue(cameraControls.zoom)}</span>
+                  </label>
+                )}
+              </div>
+              <p className="mt-2 text-[10px] text-muted-foreground">
+                Hardware support varies. Aperture is exposed only when the camera driver and browser provide it.
+              </p>
+            </>
+          ) : (
+            <p className="text-xs text-muted-foreground">Manual camera controls are unavailable on this device/browser.</p>
+          )}
+        </div>
+      )}
 
       <div className="flex w-full flex-col gap-3 min-[380px]:flex-row">
         {capturedImage ? (

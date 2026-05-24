@@ -113,6 +113,15 @@ async function setRangeInputValue(page: Page, labelPattern: RegExp, value: numbe
   }, value);
 }
 
+test("camera app capture option is available without developer file-upload mode", async ({ page }) => {
+  await seedSignedInSession(page, { userId: "user-1" });
+  await mockCommonApi(page, { userId: "user-1" });
+
+  await page.goto("/inspect");
+  await expect(page.getByText("Use Camera App")).toBeVisible();
+  await expect(page.locator('input[type="file"][capture="environment"]')).toHaveCount(1);
+});
+
 test("manual camera controls apply focus and exposure constraints when supported", async ({ page }) => {
   await installMockCamera(page);
   await seedSignedInSession(page, { userId: "user-1" });

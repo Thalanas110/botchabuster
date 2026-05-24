@@ -171,7 +171,7 @@ export function CameraCapture({
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isStarting, setIsStarting] = useState(false);
-  const [qualitySource, setQualitySource] = useState<"canvas" | "file">("canvas");
+  const [qualitySource, setQualitySource] = useState<"canvas" | "file" | "cameraApp">("canvas");
   const [uploadedFile, setUploadedFile] = useState<File | null>(null);
   const [captureGuideBox, setCaptureGuideBox] = useState<SquareGuideBox | null>(null);
   const [modelInputPreview, setModelInputPreview] = useState<string | null>(null);
@@ -501,7 +501,7 @@ export function CameraCapture({
   }, [disabled, resetCameraControls, stream, updateModelInputPreview]);
 
   const handleCapturedImageLoad = useCallback(() => {
-    if (qualitySource !== "file" || !uploadedFile || !capturedImageRef.current) {
+    if ((qualitySource !== "file" && qualitySource !== "cameraApp") || !uploadedFile || !capturedImageRef.current) {
       return;
     }
 
@@ -541,18 +541,18 @@ export function CameraCapture({
   const confirmCapture = useCallback(() => {
     if (disabled) return;
 
-    if (qualitySource === "file") {
-      if (!allowFileUpload) {
+    if (qualitySource === "file" || qualitySource === "cameraApp") {
+      if (qualitySource === "file" && !allowFileUpload) {
         toast.error("File upload is only available in unlocked developer options.");
         return;
       }
 
       if (uploadedFile) {
-        // Uploaded files already pass assessFileQuality() before preview.
+        const captureSource = qualitySource === "cameraApp" ? "camera" : "file";
         onCapture({
           file: uploadedFile,
           guideBox: captureGuideBox,
-          source: "file",
+          source: captureSource,
           capturedAt: new Date().toISOString(),
         });
       }
@@ -601,6 +601,29 @@ export function CameraCapture({
     resetCameraControls();
   }, [disabled, resetCameraControls, stream]);
 
+  const prepareCapturedFile = useCallback(
+    async (file: File, source: "file" | "cameraApp", inputElement: HTMLInputElement) => {
+      const quality = await assessFileQuality(file);
+      if (!quality.accepted) {
+        toast.error(quality.reasons.join(" "));
+        inputElement.value = "";
+        return;
+      }
+
+      setUploadedFile(file);
+      setQualitySource(source);
+      setCaptureGuideBox(null);
+      setModelInputPreview(null);
+      setIsPreparingModelPreview(false);
+      previewRequestIdRef.current += 1;
+      const reader = new FileReader();
+      reader.onload = (ev) => setCapturedImage(ev.target?.result as string);
+      reader.readAsDataURL(file);
+      inputElement.value = "";
+    },
+    []
+  );
+
   const handleFileInput = useCallback(
     async (e: React.ChangeEvent<HTMLInputElement>) => {
       if (disabled) return;
@@ -611,26 +634,21 @@ export function CameraCapture({
       }
 
       const file = e.target.files?.[0];
-      if (file) {
-        const quality = await assessFileQuality(file);
-        if (!quality.accepted) {
-          toast.error(quality.reasons.join(" "));
-          e.target.value = "";
-          return;
-        }
-
-        setUploadedFile(file);
-        setQualitySource("file");
-        setCaptureGuideBox(null);
-        setModelInputPreview(null);
-        setIsPreparingModelPreview(false);
-        previewRequestIdRef.current += 1;
-        const reader = new FileReader();
-        reader.onload = (ev) => setCapturedImage(ev.target?.result as string);
-        reader.readAsDataURL(file);
-      }
+      if (!file) return;
+      await prepareCapturedFile(file, "file", e.target);
     },
-    [allowFileUpload, disabled, onCapture, updateModelInputPreview]
+    [allowFileUpload, disabled, prepareCapturedFile]
+  );
+
+  const handleCameraAppInput = useCallback(
+    async (e: React.ChangeEvent<HTMLInputElement>) => {
+      if (disabled) return;
+
+      const file = e.target.files?.[0];
+      if (!file) return;
+      await prepareCapturedFile(file, "cameraApp", e.target);
+    },
+    [disabled, prepareCapturedFile]
   );
 
   const supportsManualFocusMode = cameraControls.focusModeOptions.includes("manual");
@@ -667,12 +685,12 @@ export function CameraCapture({
                 }}
               />
                 <p className="absolute bottom-4 rounded-full border border-primary/40 bg-background/80 px-3 py-1 text-[10px] uppercase tracking-wide text-primary">
-                {getActiveModelPreprocessContract() === "segmented_center_roi"
-                  ? "Segmented center ROI -> 224x224 model input"
-                  : qualitySource === "file" && !captureGuideBox
-                  ? "Center crop -> 224x224 model input"
-                  : "Guide crop -> 224x224 model input"}
-              </p>
+                  {getActiveModelPreprocessContract() === "segmented_center_roi"
+                    ? "Segmented center ROI -> 224x224 model input"
+                    : (qualitySource === "file" || qualitySource === "cameraApp") && !captureGuideBox
+                    ? "Center crop -> 224x224 model input"
+                    : "Guide crop -> 224x224 model input"}
+                </p>
             </div>
 
             {showModelInputPreview && (
@@ -888,11 +906,30 @@ export function CameraCapture({
             <Button
               onClick={() => void startCamera()}
               size="lg"
-              className={`w-full gap-2 rounded-xl ${allowFileUpload ? "min-[380px]:flex-1" : ""}`}
+              className="w-full gap-2 rounded-xl min-[380px]:flex-1"
               disabled={disabled || isStarting}
             >
               <Camera className="h-5 w-5" /> {isStarting ? "Starting..." : "Open Camera"}
             </Button>
+            <label className="w-full min-[380px]:flex-1">
+              <Button
+                variant="outline"
+                size="lg"
+                className="w-full cursor-pointer gap-2 rounded-xl"
+                disabled={disabled}
+                asChild
+              >
+                <span>Use Camera App</span>
+              </Button>
+              <input
+                type="file"
+                accept="image/*"
+                capture="environment"
+                className="hidden"
+                disabled={disabled}
+                onChange={handleCameraAppInput}
+              />
+            </label>
             {allowFileUpload && (
               <label className="w-full min-[380px]:flex-1">
                 <Button
